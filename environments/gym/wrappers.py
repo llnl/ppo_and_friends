@@ -351,6 +351,115 @@ class SingleAgentGymWrapper(PPOGymWrapper):
         return obs, critic_obs
 
 
+class SingleAgentGymSparseRewardWrapper(SingleAgentGymWrapper):
+
+    def __init__(self,
+                 env,
+                 reward_trigger = 1.0,
+                 reward_value   = 1.0,
+                 sparse_value   = 0.0,
+                 reward_freq    = 1,
+                 **kw_args):
+        """
+        Parameters:
+        ----------
+        env: gym environment
+            The gym environment to wrap.
+        reward_trigger: float or tuple
+            A reward is given only when this a reward of reward_trigger
+            is given by the underlying environment. This can either be a
+            float or a tuple of the inclusive [min, max] range.
+        reward_value: float
+            When reward_trigger is encountered reward_freq times, reward_value is
+            the returned reward.
+        sparse_value: float
+            The value to return when the reward conditions have not been met.
+        reward_freq: int
+            reward_trigger must be encountered reward_freq times before
+            reward_value is returned.
+        """
+        super(SingleAgentGymSparseRewardWrapper, self).__init__(
+            env,
+            **kw_args)
+
+        if type(reward_trigger) == float:
+            self.reward_trigger_min = reward_trigger
+            self.reward_trigger_max = reward_trigger
+        elif type(reward_trigger) == tuple:
+            assert len(reward_trigger) == 2
+
+            self.reward_trigger_min = reward_trigger[0]
+            self.reward_trigger_max = reward_trigger[1]
+        else:
+            msg  = f"ERROR: reward_trigger must be a float or tuple "
+            msg += f"but received {type(reward_trigger)}."
+            rank_print(msg)
+            comm.Abort()
+
+
+        self.reward_value   = reward_value
+        self.sparse_value   = sparse_value
+        self.reward_freq    = reward_freq
+        self.trigger_count  = 0
+
+    def _wrap_gym_step(self, *args):
+        """
+        A method defining how to wrap our enviornment
+        step.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs, reward,
+        terminated, truncated, info) s.t. each is a dictionary.
+        """
+        agent_id = self.get_agent_id()
+
+        obs, critic_obs, reward, terminated, truncated, info = super()._wrap_gym_step(*args)
+
+        if reward[agent_id] >= self.reward_trigger_min and reward[agent_id] <= self.reward_trigger_max:
+            self.trigger_count += 1
+
+        reward[agent_id] = self.sparse_value
+
+        if self.trigger_count % self.reward_freq:
+            reward[agent_id] = self.reward_value
+
+        return obs, critic_obs, reward, terminated, truncated, info
+
+    def _wrap_gym_reset(self, *args):
+        """
+        A method defining how to wrap our enviornment
+        reset.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs) s.t.
+        each is a dictionary.
+        """
+        self.trigger_count = 0
+        return super()._wrap_gym_reset(*args)
+
+
 class MultiAgentGymWrapper(PPOGymWrapper):
     """
     A wrapper for multi-agent gym environments.
