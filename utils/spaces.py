@@ -9,6 +9,35 @@ comm      = MPI.COMM_WORLD
 rank      = comm.Get_rank()
 num_procs = comm.Get_size()
 
+
+def validate_observation_space(observation_space):
+    """
+    """
+    is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.Discrete
+    get_space_args    = lambda s : (s.n, s.start, s._np_random)
+
+    if is_discrete_space(observation_space):
+        n, start, seed = get_space_args(observation_space)
+        return ShapelyDiscrete(n = n, start = start, seed = seed)
+
+    elif type(observation_space) == Tuple:
+        new_space = []
+        for i in range(len(observation_space)):
+            if is_discrete_space(observation_space[i]):
+                n, start, seed = get_space_args(observation_space)
+                new_space.append(ShapelyDiscrete(n = n, start = start, seed = seed)
+            else:
+                new_space.append(observation_space[i])
+
+        return Tuple(new_space)
+
+    elif type(observation_space) == Dict:
+        for key in observation_space:
+            if is_discrete_space(observation_space[key]):
+                n, start, seed = get_space_args(observation_space)
+                observation_space[key] = ShapelyDiscrete(n = n, start = start, seed = seed)
+
+
 def gym_space_to_gymnasium_space(space):
     """
     gym and gymnasium spaces are incompatible. This function
@@ -75,6 +104,7 @@ def gym_space_to_gymnasium_space(space):
         comm.abort()
 
     return space
+
 
 class FlatteningTuple(Tuple):
     """
@@ -169,3 +199,19 @@ class FlatteningTuple(Tuple):
     @property
     def shape(self):
         return (self.flattened_size,)
+
+
+class ShapelyDiscrete(Discrete):
+
+    def __init__(self, *args, **kw_args):
+        """
+        """
+        super().__init__(*args, **kw_args)
+        self.shape = (1,)
+
+    def sample(self, *args, **kw_args):
+        """
+        """
+        return np.array((super.sample(*args, **kw_args),))
+
+
