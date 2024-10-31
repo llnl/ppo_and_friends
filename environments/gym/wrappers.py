@@ -309,7 +309,12 @@ class SingleAgentGymWrapper(PPOGymWrapper):
         """
         agent_id   = self.get_agent_id()
         env_action = action[agent_id]
-        env_action = env_action.reshape(self.action_space[agent_id].shape)
+
+        if self.action_space[agent_id].shape == ():
+            env_action = env_action.item()
+        else:
+            env_action = env_action.reshape(self.action_space[agent_id].shape)
+
         return env_action
 
     def _wrap_gym_step(self,
@@ -664,8 +669,13 @@ class MultiAgentGymWrapper(PPOGymWrapper):
         gym_actions = np.array([None] * self.num_agents)
 
         for a_idx, a_id in enumerate(self.agent_ids):
+
             env_action = actions[a_id]
-            gym_actions[a_idx] = env_action
+
+            if self.action_space[a_id].shape == ():
+                gym_actions[a_idx] = env_action.item()
+            else:
+                gym_actions[a_idx] = env_action.reshape(self.action_space[a_id].shape)
 
         return tuple(gym_actions)
 
