@@ -719,6 +719,50 @@ class RewardClipper(GenericClipper):
         return obs, critic_obs, reward, terminated, truncated, info
 
 
+class ObservationArrayWrapper(ObservationFilter):
+    """
+    """
+
+    def __init__(self,
+                 env,
+                 **kw_args):
+        """
+        Initialize the wrapper.
+
+        Parameters:
+        ----------
+        env: environment
+            The environment to wrap.
+        """
+        super(ObservationArrayWrapper, self).__init__(
+            env,
+            **kw_args)
+
+    def _filter_critic_observation(self, obs):
+        """
+        A simple wrapper for clipping the critic observation.
+
+        Arguments:
+            obs    The observation to clip.
+
+        Returns:
+            The clipped observation.
+        """
+        return self._apply_agent_clipping(obs)
+
+    def _filter_local_observation(self, obs):
+        """
+            A simple wrapper for clipping local the observation.
+
+            Arguments:
+                obs    The observation to clip.
+
+            Returns:
+                The clipped observation.
+        """
+        return self._apply_agent_clipping(obs)
+
+
 # FIXME: this needs to be tested after MA refactor.
 class ObservationAugmentingWrapper(IdentityWrapper):
     """

@@ -1,12 +1,14 @@
 """
-    This module contains wrappers for gym environments.
+This module contains wrappers for gym environments.
 """
 from ppo_and_friends.environments.ppo_env_wrappers import PPOEnvironmentWrapper
 import numpy as np
 from gymnasium.spaces import Box, Discrete
 from ppo_and_friends.utils.mpi_utils import rank_print
+from ppo_and_friends.utils.spaces import validate_observation_space
 from abc import abstractmethod
 from functools import reduce
+import numbers
 
 from mpi4py import MPI
 comm      = MPI.COMM_WORLD
@@ -24,6 +26,7 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
     actor observation.
     """
     def __init__(self,
+                 env,
                  *args,
                  **kw_args):
 
@@ -37,7 +40,10 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
                 rank_print(msg)
                 comm.Abort()
 
+        env = validate_observation_space(env)
+
         super(PPOGymWrapper, self).__init__(
+            env,
             *args,
             **kw_args)
 
@@ -60,8 +66,10 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
         actions = self._filter_done_agent_actions(actions)
 
         obs, critic_obs, reward, terminated, truncated, info = \
-            self._wrap_gym_step(*self.env.step(
-                self._unwrap_action(actions)))
+            self._wrap_gym_step(
+                *self._validate_step_return(
+                    *self.env.step(
+                        self._unwrap_action(actions))))
 
         return obs, critic_obs, reward, terminated, truncated, info
 
@@ -74,7 +82,8 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
         The actor and critic observations.
         """
         obs, critic_obs = self._wrap_gym_reset(
-            *self.env.reset(seed = self.random_seed))
+            *self._validate_reset_return(
+                *self.env.reset(seed = self.random_seed)))
 
         #
         # Gym versions >= 0.26 require the random seed to be set
@@ -173,6 +182,56 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
             assert type(seed) == int
 
         self.random_seed = seed
+
+    @abstractmethod
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return
+
+    @abstractmethod
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return
 
 
 class SingleAgentGymWrapper(PPOGymWrapper):
@@ -349,6 +408,72 @@ class SingleAgentGymWrapper(PPOGymWrapper):
         critic_obs = self._construct_critic_observation(obs, done)
 
         return obs, critic_obs
+
+    def _validate_obs(self,
+                      obs):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+
+        Returns:
+        --------
+        The agent observations.
+        """
+        if isinstance(obs, numbers.Number):
+            obs = np.array([obs])
+        return obs
+
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return self._validate_obs(obs), reward, terminated, truncated, info
+
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return self._validate_obs(obs), info
 
 
 class SingleAgentGymSparseRewardWrapper(SingleAgentGymWrapper):
@@ -680,3 +805,70 @@ class MultiAgentGymWrapper(PPOGymWrapper):
             wrapped_obs, wrapped_done)
 
         return wrapped_obs, critic_obs
+
+    def _validate_obs(self,
+                      obs):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+
+        Returns:
+        --------
+        The agent observations.
+        """
+        for i in range(self.num_agents):
+            if isinstance(obs[i], numbers.Number):
+                obs[i] = np.array([obs[i]])
+        return obs
+
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return self._validate_obs(obs), reward, terminated, truncated, info
+
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return self._validate_obs(obs), info

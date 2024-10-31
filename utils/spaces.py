@@ -1,8 +1,10 @@
 import gym as old_gym
 import gymnasium as gym
 from gymnasium.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary
+from gymnasium.spaces.space import Space
 from ppo_and_friends.utils.mpi_utils import rank_print
 import numpy as np
+from typing import Any
 
 from mpi4py import MPI
 comm      = MPI.COMM_WORLD
@@ -10,32 +12,37 @@ rank      = comm.Get_rank()
 num_procs = comm.Get_size()
 
 
-def validate_observation_space(observation_space):
+def validate_observation_space(env):
     """
     """
     is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.Discrete
     get_space_args    = lambda s : (s.n, s.start, s._np_random)
 
-    if is_discrete_space(observation_space):
-        n, start, seed = get_space_args(observation_space)
-        return ShapelyDiscrete(n = n, start = start, seed = seed)
+    if is_discrete_space(env.observation_space):
+        n, start, seed = get_space_args(env.observation_space)
+        env.observation_space = ShapelyDiscrete(n = n, start = start, seed = seed)
 
-    elif type(observation_space) == Tuple:
+    elif type(env.observation_space) == Tuple:
         new_space = []
-        for i in range(len(observation_space)):
-            if is_discrete_space(observation_space[i]):
-                n, start, seed = get_space_args(observation_space)
-                new_space.append(ShapelyDiscrete(n = n, start = start, seed = seed)
+        for i in range(len(env.observation_space)):
+            if is_discrete_space(env.observation_space[i]):
+                n, start, seed = get_space_args(env.observation_space)
+                new_space.append(ShapelyDiscrete(n = n, start = start, seed = seed))
             else:
-                new_space.append(observation_space[i])
+                new_space.append(env.observation_space[i])
 
-        return Tuple(new_space)
+        env.observation_space = Tuple(new_space)
 
-    elif type(observation_space) == Dict:
-        for key in observation_space:
-            if is_discrete_space(observation_space[key]):
-                n, start, seed = get_space_args(observation_space)
-                observation_space[key] = ShapelyDiscrete(n = n, start = start, seed = seed)
+    elif type(env.observation_space) == Dict:
+        for key in env.observation_space:
+            if is_discrete_space(env.observation_space[key]):
+                n, start, seed = get_space_args(env.observation_space)
+                env.observation_space[key] = ShapelyDiscrete(n = n, start = start, seed = seed)
+
+    if hasattr(env, "env"):
+        env.env = validate_observation_space(env.env)
+
+    return env
 
 
 def gym_space_to_gymnasium_space(space):
@@ -203,11 +210,29 @@ class FlatteningTuple(Tuple):
 
 class ShapelyDiscrete(Discrete):
 
-    def __init__(self, *args, **kw_args):
+    def __init__(
+        self,
+        #n: int | np.integer[Any],
+        #seed: int | np.random.Generator | None = None,
+        #start: int | np.integer[Any] = 0,
+        n,
+        seed  = None,
+        start = 0,
+    ):
         """
         """
-        super().__init__(*args, **kw_args)
-        self.shape = (1,)
+        assert np.issubdtype(
+            type(n), np.integer
+        ), f"Expects `n` to be an integer, actual dtype: {type(n)}"
+        assert n > 0, "n (counts) have to be positive"
+        assert np.issubdtype(
+            type(start), np.integer
+        ), f"Expects `start` to be an integer, actual type: {type(start)}"
+
+        self.n     = np.int64(n)
+        self.start = np.int64(start)
+
+        super(Discrete, self).__init__((1,), np.int64, seed)
 
     def sample(self, *args, **kw_args):
         """
