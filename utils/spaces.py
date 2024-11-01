@@ -1,6 +1,6 @@
 import gym as old_gym
 import gymnasium as gym
-from gymnasium.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary
+from gymnasium.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary, Dict
 from gymnasium.spaces.space import Space
 from ppo_and_friends.utils.mpi_utils import rank_print
 import numpy as np
@@ -15,7 +15,7 @@ num_procs = comm.Get_size()
 def validate_observation_space(env):
     """
     """
-    is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.Discrete
+    is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.spaces.Discrete
     get_space_args    = lambda s : (s.n, s.start, s._np_random)
 
     if is_discrete_space(env.observation_space):
@@ -26,7 +26,7 @@ def validate_observation_space(env):
         new_space = []
         for i in range(len(env.observation_space)):
             if is_discrete_space(env.observation_space[i]):
-                n, start, seed = get_space_args(env.observation_space)
+                n, start, seed = get_space_args(env.observation_space[i])
                 new_space.append(ShapelyDiscrete(n = n, start = start, seed = seed))
             else:
                 new_space.append(env.observation_space[i])
@@ -36,7 +36,7 @@ def validate_observation_space(env):
     elif type(env.observation_space) == Dict:
         for key in env.observation_space:
             if is_discrete_space(env.observation_space[key]):
-                n, start, seed = get_space_args(env.observation_space)
+                n, start, seed = get_space_args(env.observation_space[key])
                 env.observation_space[key] = ShapelyDiscrete(n = n, start = start, seed = seed)
 
     if hasattr(env, "env"):
