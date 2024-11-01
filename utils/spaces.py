@@ -212,9 +212,6 @@ class ShapelyDiscrete(Discrete):
 
     def __init__(
         self,
-        #n: int | np.integer[Any],
-        #seed: int | np.random.Generator | None = None,
-        #start: int | np.integer[Any] = 0,
         n,
         seed  = None,
         start = 0,
