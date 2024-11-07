@@ -445,7 +445,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         if isinstance(space, SparseFlatteningTuple):
             sparse_sample = []
             for idx in space.sparse_idxs:
-                sparse_sample.append(dense_sample[idx])
+                sparse_sample.append(self._sparsify_sample(space.spaces[idx], dense_sample[idx]))
 
             return tuple(sparse_sample)
 
