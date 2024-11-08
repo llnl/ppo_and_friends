@@ -117,15 +117,6 @@ class FlatteningCompositeSpace(ABC):
         """
         super().__init__()
 
-        self.supported_spaces = [
-            Discrete,
-            MultiDiscrete,
-            MultiBinary,
-            Box,
-            Dict,
-            Tuple,
-        ]
-
         self._auto_flatten   = False
         self._flattened_size = None
 
@@ -234,6 +225,61 @@ class FlatteningCompositeSpace(ABC):
 
         return space
 
+    def _convert_spaces_to_gymnasium(self, spaces, require_supported=True):
+        """
+        """
+        old_gym_spaces = [\
+            old_gym.spaces.Box,
+            old_gym.spaces.Discrete,
+            old_gym.spaces.MultiDiscrete,
+            old_gym.spaces.MultiBinary,
+            old_gym.spaces.Tuple,
+            old_gym.spaces.Dict]
+
+        if isinstance(spaces, dict) or isinstance(spaces, Dict):
+            space_iter = spaces.keys()
+        else:
+            space_iter = iter(range(len(spaces)))
+
+        for iter_i in space_iter:
+            space = spaces[iter_i]
+
+            if type(space) in old_gym_spaces:
+                space = gym_space_to_gymnasium_space(space)
+                spaces[iter_i] = space
+
+            if not self._space_is_supported(space):
+                msg  = f"\nWARNING: sub space {space} of type {type(space)} is not currently supported by "
+                msg += f"the FlatteningCompositeSpace. Supported sub-spaces are "
+                msg += f"{self.supported_spaces}.\n"
+
+                if require_supported:
+                    raise ValueError(msg)
+                else:
+                    sys.stderr.write(msg)
+
+        return spaces
+
+    def _calculate_sample_sizes(self, spaces):
+        """
+        """
+        if isinstance(spaces, dict) or isinstance(spaces, Dict):
+            space_iter = spaces.keys()
+        else:
+            space_iter = iter(range(len(spaces)))
+
+        sample_sizes = []
+        for iter_i in space_iter:
+            space  = spaces[iter_i]
+            sample = self.flatten_sample(space.sample())
+
+            if type(sample) == np.ndarray:
+                self.sample_sizes.append(sample.size)
+            else:
+                self.sample_sizes.append(1)
+
+        return np.array(self.sample_sizes, dtype=np.int32)
+
     @property
     def auto_flatten(self):
         return self._auto_flatten
@@ -245,6 +291,17 @@ class FlatteningCompositeSpace(ABC):
     @property
     def shape(self):
         return (self._flattened_size,)
+
+    @property
+    def supported_spaces(self):
+        return [
+            Discrete,
+            MultiDiscrete,
+            MultiBinary,
+            Box,
+            Dict,
+            Tuple,
+        ]
 
 
 class FlatteningTuple(Tuple, FlatteningCompositeSpace):
@@ -267,38 +324,9 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
         #
         FlatteningCompositeSpace.__init__(self, *args, **kw_args)
 
-        self.sample_sizes   = []
-
-        old_gym_spaces = [\
-            old_gym.spaces.Box,
-            old_gym.spaces.Discrete,
-            old_gym.spaces.MultiDiscrete,
-            old_gym.spaces.MultiBinary,
-            old_gym.spaces.Tuple,
-            old_gym.spaces.Dict]
-
-        for i in range(len(spaces)):
-            space = spaces[i]
-
-            if type(space) in old_gym_spaces:
-                space = gym_space_to_gymnasium_space(space)
-                spaces[i] = space
-
-            if not self._space_is_supported(space):
-                msg  = f"\nWARNING: sub space {space} of type {type(space)} is not currently supported by "
-                msg += f"the FlatteningTuple. Supported sub-spaces are "
-                msg += f"{self.supported_spaces}.\n"
-                sys.stderr.write(msg)
-
-            sample = self.flatten_sample(space.sample())
-
-            if type(sample) == np.ndarray:
-                self.sample_sizes.append(sample.size)
-            else:
-                self.sample_sizes.append(1)
-
-        self.sample_sizes    = np.array(self.sample_sizes, dtype=np.int32)
-        self._flattened_size = self.sample_sizes.sum()
+        spaces = self._convert_spaces_to_gymnasium(spaces)
+        self.sample_sizes = self._calculate_sample_sizes(spaces)
+        self._update_flattened_size()
 
         super().__init__(spaces, *args, **kw_args)
 
@@ -333,38 +361,9 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
         #
         FlatteningCompositeSpace.__init__(self, *args, **kw_args)
 
-        self.sample_sizes   = []
-
-        old_gym_spaces = [\
-            old_gym.spaces.Box,
-            old_gym.spaces.Discrete,
-            old_gym.spaces.MultiDiscrete,
-            old_gym.spaces.MultiBinary,
-            old_gym.spaces.Tuple,
-            old_gym.spaces.Dict]
-
-        for key in self.spaces:
-            space = self.spaces[key]
-
-            if type(space) in old_gym_spaces:
-                space = gym_space_to_gymnasium_space(space)
-                self.spaces[key] = space
-                
-            if not self._space_is_supported(space):
-                msg  = f"\nWARNING: sub space {space} of type {type(space)} is not currently supported by "
-                msg += f"the FlatteningDict. Supported sub-spaces are "
-                msg += f"{self.supported_spaces}.\n"
-                sys.stderr.write(msg)
-
-            sample = self.flatten_sample(space.sample())
-
-            if type(sample) == np.ndarray:
-                self.sample_sizes.append(sample.size)
-            else:
-                self.sample_sizes.append(1)
-
-        self.sample_sizes    = np.array(self.sample_sizes, dtype=np.int32)
-        self._flattened_size = self.sample_sizes.sum()
+        spaces = self._convert_spaces_to_gymnasium(spaces)
+        self.sample_sizes = self._calculate_sample_sizes(spaces)
+        self._update_flattened_size()
 
     def sample(self):
         """
@@ -568,11 +567,13 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
 class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
 
-    def __init__(self, *args, **kw_args):
+    def __init__(self, spaces, *args, **kw_args):
         """
         """
-        super().__init__(*args, **kw_args)
+        spaces = self._convert_spaces_to_gymnasium(spaces, require_supported=False)
+
         SparseFlatteningCompositeSpace.__init__(self, *args, **kw_args)
+        super().__init__(spaces, *args, **kw_args)
 
         self.spaces = self._wrap_sub_spaces(Tuple(self.spaces)).spaces
 
@@ -604,6 +605,8 @@ class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
     def __init__(self, spaces, *args, **kw_args):
         """
         """
+        spaces = self._convert_spaces_to_gymnasium(spaces, require_supported=False)
+
         SparseFlatteningCompositeSpace.__init__(self, spaces, *args, **kw_args)
         super().__init__(Dict(spaces), *args, **kw_args)
 
