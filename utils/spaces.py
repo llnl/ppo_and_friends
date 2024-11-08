@@ -127,7 +127,8 @@ class FlatteningCompositeSpace():
             Tuple,
         ]
 
-        self._auto_flatten = False
+        self._auto_flatten   = False
+        self._flattened_size = None
 
     def _space_is_supported(self, space):
         """
@@ -289,8 +290,8 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
             else:
                 self.sample_sizes.append(1)
 
-        self.sample_sizes   = np.array(self.sample_sizes, dtype=np.int32)
-        self.flattened_size = self.sample_sizes.sum()
+        self.sample_sizes    = np.array(self.sample_sizes, dtype=np.int32)
+        self._flattened_size = self.sample_sizes.sum()
 
         super().__init__(spaces, *args, **kw_args)
 
@@ -305,7 +306,7 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
 
     @property
     def shape(self):
-        return (self.flattened_size,)
+        return (self._flattened_size,)
 
 
 class FlatteningDict(Dict, FlatteningCompositeSpace):
@@ -355,8 +356,8 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
             else:
                 self.sample_sizes.append(1)
 
-        self.sample_sizes   = np.array(self.sample_sizes, dtype=np.int32)
-        self.flattened_size = self.sample_sizes.sum()
+        self.sample_sizes    = np.array(self.sample_sizes, dtype=np.int32)
+        self._flattened_size = self.sample_sizes.sum()
 
     def sample(self):
         """
@@ -369,7 +370,7 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
 
     @property
     def shape(self):
-        return (self.flattened_size,)
+        return (self._flattened_size,)
 
 
 class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
@@ -519,11 +520,11 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         return self._is_sparse
 
     @property
-    def sparse_mode(self):
+    def mode(self):
         return self._mode
 
-    @sparse_mode.setter
-    def sparse_mode(self, mode):
+    @mode.setter
+    def mode(self, mode):
         assert mode in ["sparse", "dense"]
 
         self._mode = mode
@@ -532,6 +533,11 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             self.spaces = self._sparse_space.spaces
         elif mode == "dense":
             self.spaces = self._dense_space.spaces
+
+        temp = self._auto_flatten
+        self._auto_flatten   = True
+        self._flattened_size = self.sample().size
+        self._auto_flatten   = True
 
 
 class SparseFlatteningTuple(FlatteningTuple, SparseFlatteningCompositeSpace):
