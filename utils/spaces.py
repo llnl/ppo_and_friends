@@ -2,10 +2,10 @@ import gym as old_gym
 import gymnasium as gym
 from gymnasium.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary, Dict, Sequence, Graph
 from gymnasium.spaces.space import Space
-from ppo_and_friends.utils.mpi_utils import rank_print
 import numpy as np
-from typing import Any
 import numbers
+import sys
+from abc import ABC, abstractmethod
 
 from mpi4py import MPI
 comm      = MPI.COMM_WORLD
@@ -103,15 +103,14 @@ def gym_space_to_gymnasium_space(space):
         space = gym.spaces.Tuple(new_space)
 
     else:
-        msg  = f"ERROR: conversion of gym space {space} to "
+        msg  = f"conversion of gym space {space} to "
         msg += f"gymnasium is not currently supported. Contact "
         msg += f"a developer to extend support for this space."
-        rank_print(msg)
-        comm.abort()
+        raise TypeError(msg)
 
     return space
 
-class FlatteningCompositeSpace():
+class FlatteningCompositeSpace(ABC):
 
     def __init__(self, *args, **kw_args):
         """
@@ -129,6 +128,12 @@ class FlatteningCompositeSpace():
 
         self._auto_flatten   = False
         self._flattened_size = None
+
+    @abstractmethod
+    def sample(self):
+        """
+        """
+        return
 
     def _space_is_supported(self, space):
         """
@@ -151,10 +156,9 @@ class FlatteningCompositeSpace():
             sample = np.array((sample,))
 
         else:
-            msg  = f"ERROR: Unknown sample type of {type(sample)} "
+            msg  = f"Unknown sample type of {type(sample)} "
             msg += f"encountered! Bailing..."
-            rank_print(msg)
-            comm.Abort()
+            raise TypeError(msg)
 
         return sample
 
@@ -177,10 +181,9 @@ class FlatteningCompositeSpace():
                 flattened_data.append(data)
 
         else:
-            msg  = f"ERROR: Unknown composite sample type of {type(sample)} "
+            msg  = f"Unknown composite sample type of {type(sample)} "
             msg += f"encountered! Bailing..."
-            rank_print(msg)
-            comm.Abort()
+            raise TypeError(msg)
 
         return np.concatenate(flattened_data)
 
@@ -215,7 +218,7 @@ class FlatteningCompositeSpace():
             for key in space:
                 space[key] = self._wrap_sub_spaces(space[key])
 
-            return SparseFlatteningDict(
+            return FlatteningDict(
                 space.spaces, seed = space._np_random)
 
         elif isinstance(space, Tuple):
@@ -226,7 +229,7 @@ class FlatteningCompositeSpace():
 
             space = Tuple(wrapped_spaces)
 
-            return SparseFlatteningTuple(
+            return FlatteningTuple(
                 space.spaces, seed = space._np_random)
 
         return space
@@ -238,6 +241,10 @@ class FlatteningCompositeSpace():
     @auto_flatten.setter
     def auto_flatten(self, auto_flatten):
         self._auto_flatten = auto_flatten
+
+    @property
+    def shape(self):
+        return (self._flattened_size,)
 
 
 class FlatteningTuple(Tuple, FlatteningCompositeSpace):
@@ -278,10 +285,10 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
                 spaces[i] = space
 
             if not self._space_is_supported(space):
-                msg  = f"WARNING: sub space {space} of type {type(space)} is not currently supported by "
+                msg  = f"\nWARNING: sub space {space} of type {type(space)} is not currently supported by "
                 msg += f"the FlatteningTuple. Supported sub-spaces are "
-                msg += f"{self.supported_spaces}."
-                rank_print(msg)
+                msg += f"{self.supported_spaces}.\n"
+                sys.stderr.write(msg)
 
             sample = self.flatten_sample(space.sample())
 
@@ -300,7 +307,7 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
         Sample the space.
         """
         data = super().sample()
-        if self.auto_flatten:
+        if self._auto_flatten:
             return self.flatten_sample(data)
         return data
 
@@ -344,10 +351,10 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
                 self.spaces[key] = space
                 
             if not self._space_is_supported(space):
-                msg  = f"WARNING: sub space {space} of type {type(space)} is not currently supported by "
+                msg  = f"\nWARNING: sub space {space} of type {type(space)} is not currently supported by "
                 msg += f"the FlatteningDict. Supported sub-spaces are "
-                msg += f"{self.supported_spaces}."
-                rank_print(msg)
+                msg += f"{self.supported_spaces}.\n"
+                sys.stderr.write(msg)
 
             sample = self.flatten_sample(space.sample())
 
@@ -364,7 +371,7 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
         Sample the space.
         """
         data = super().sample()
-        if self.auto_flatten:
+        if self._auto_flatten:
             return self.flatten_sample(data)
         return data
 
@@ -382,7 +389,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         self._is_sparse    = False
         self._sparse_space = None
         self._dense_space  = None
-        self._mode         = "sparse"
+        self._mode         = "dense"
 
     def _sparsify_tuple_space(self, tuple_space):
         """
@@ -400,10 +407,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
                     sparse_idxs.append(s_idx)
             else:
                 self._is_sparse = True
-                msg  = f"WARNING: encountered a Tuple space containing an unsupported "
+                msg  = f"\nWARNING: encountered a Tuple space containing an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
-                msg += f"flattening."
-                rank_print(msg)
+                msg += f"flattening.\n"
+                sys.stderr.write(msg)
 
         return sparse_idxs, Tuple(sparse_spaces)
 
@@ -421,10 +428,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
                     sparse_spaces[key] = space
             else:
                 self._is_sparse = True
-                msg  = f"WARNING: spaces key {key} maps to an unsupported "
+                msg  = f"\nWARNING: spaces key {key} maps to an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
-                msg += f"flattening."
-                rank_print(msg)
+                msg += f"flattening.\n"
+                sys.stderr.write(msg)
 
         return Dict(sparse_spaces)
 
@@ -439,10 +446,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             return sparse_tuple
 
         self._is_sparse = True
-        msg  = f"WARNING: encountered a Tuple space containing an unsupported "
+        msg  = f"\nWARNING: encountered a Tuple space containing an unsupported "
         msg += f"space type of {type(space)}. It will be ignored when "
         msg += f"flattening."
-        rank_print(msg)
+        sys.stderr.write(msg)
         return None
 
     def sparse_sample(self, *args, **kw_args):
@@ -478,10 +485,9 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             return np.array([dense_sample])
 
         else:
-            msg  = f"ERROR: Unknown sample from space {type(space)} of type {type(dense_sample)} "
+            msg  = f"Unknown sample from space {type(space)} of type {type(dense_sample)} "
             msg += f"encountered! Bailing..."
-            rank_print(msg)
-            comm.Abort()
+            raise ValueError(msg)
 
     def _sparse_flatten_sample(self, space, dense_sample):
         """
@@ -498,14 +504,37 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         """
         return self._sparse_flatten_sample(self, dense_sample)
 
-    def sample(self):
+    def _wrap_space(self, space):
         """
-        Sample the space.
         """
-        data = super().sample()
-        if self.auto_flatten:
-            return self.sparse_flatten_sample(data)
-        return data
+        if isinstance(space, Dict):
+
+            for key in space:
+                space[key] = self._wrap_sub_spaces(space[key])
+
+            return SparseFlatteningDict(
+                space.spaces, seed = space._np_random)
+
+        elif isinstance(space, Tuple):
+
+            wrapped_spaces = []
+            for sub_space in space:
+                wrapped_spaces.append(self._wrap_sub_spaces(sub_space))
+
+            space = Tuple(wrapped_spaces)
+
+            return SparseFlatteningTuple(
+                space.spaces, seed = space._np_random)
+
+        return space
+
+    def _update_flattened_size(self):
+        """
+        """
+        temp = self._auto_flatten
+        self._auto_flatten   = True
+        self._flattened_size = self.sample().size
+        self._auto_flatten   = temp
 
     @property
     def sparse_space(self):
@@ -534,13 +563,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         elif mode == "dense":
             self.spaces = self._dense_space.spaces
 
-        temp = self._auto_flatten
-        self._auto_flatten   = True
-        self._flattened_size = self.sample().size
-        self._auto_flatten   = True
+        self._update_flattened_size()
 
 
-class SparseFlatteningTuple(FlatteningTuple, SparseFlatteningCompositeSpace):
+class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
 
     def __init__(self, *args, **kw_args):
         """
@@ -559,8 +585,21 @@ class SparseFlatteningTuple(FlatteningTuple, SparseFlatteningCompositeSpace):
         else:
             self._sparse_space = self._dense_space
 
+    def sample(self):
+        """
+        Sample the space.
+        """
+        data = super().sample()
+        if self._auto_flatten:
+            return self.sparse_flatten_sample(data)
+        return data
 
-class SparseFlatteningDict(FlatteningDict, SparseFlatteningCompositeSpace):
+    @property
+    def shape(self):
+        return (self._flattened_size,)
+
+
+class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
 
     def __init__(self, spaces, *args, **kw_args):
         """
@@ -578,6 +617,19 @@ class SparseFlatteningDict(FlatteningDict, SparseFlatteningCompositeSpace):
             self._sparse_space = sparse_space
         else:
             self._sparse_space = self._dense_space
+
+    def sample(self):
+        """
+        Sample the space.
+        """
+        data = super().sample()
+        if self._auto_flatten:
+            return self.sparse_flatten_sample(data)
+        return data
+
+    @property
+    def shape(self):
+        return (self._flattened_size,)
 
 
 class ShapelyDiscrete(Discrete):
