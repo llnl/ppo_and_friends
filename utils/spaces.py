@@ -235,7 +235,7 @@ class FlatteningCompositeSpace():
         return self._auto_flatten
 
     @auto_flatten.setter
-    def set_auto_flatten(self, auto_flatten):
+    def auto_flatten(self, auto_flatten):
         self._auto_flatten = auto_flatten
 
 
@@ -378,8 +378,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         """
         """
         super().__init__(*args, **kw_args)
-        self.is_sparse    = False
-        self.sparse_space = None
+        self._is_sparse    = False
+        self._sparse_space = None
+        self._dense_space  = None
+        self._mode         = "sparse"
 
     def _sparsify_tuple_space(self, tuple_space):
         """
@@ -396,7 +398,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
                     sparse_spaces.append(space)
                     sparse_idxs.append(s_idx)
             else:
-                self.is_sparse = True
+                self._is_sparse = True
                 msg  = f"WARNING: encountered a Tuple space containing an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
                 msg += f"flattening."
@@ -417,7 +419,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
                 if space is not None:
                     sparse_spaces[key] = space
             else:
-                self.is_sparse = True
+                self._is_sparse = True
                 msg  = f"WARNING: spaces key {key} maps to an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
                 msg += f"flattening."
@@ -435,7 +437,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             _, sparse_tuple = self._sparsify_tuple_space(composite)
             return sparse_tuple
 
-        self.is_sparse = True
+        self._is_sparse = True
         msg  = f"WARNING: encountered a Tuple space containing an unsupported "
         msg += f"space type of {type(space)}. It will be ignored when "
         msg += f"flattening."
@@ -445,7 +447,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def sparse_sample(self, *args, **kw_args):
         """
         """
-        return self.sparse_space.sample(*args, **kw_args)
+        return self._sparse_space.sample(*args, **kw_args)
 
     def _sparsify_sample(self, space, dense_sample):
         """
@@ -460,10 +462,13 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         elif isinstance(space, SparseFlatteningDict):
 
             sparse_sample = {}
-            for key in space.sparse_space.keys():
+            for key in space._sparse_space.keys():
                 sparse_sample[key] = self._sparsify_sample(space.spaces[key], dense_sample[key])
 
             return dict(sparse_sample)
+
+        elif isinstance(space, Tuple) or isinstance(space, Dict):
+            return dense_sample
 
         elif isinstance(dense_sample, np.ndarray):
             return dense_sample
@@ -480,7 +485,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def _sparse_flatten_sample(self, space, dense_sample):
         """
         """
-        if self.is_sparse:
+        if self._is_sparse:
             sparse_sample = self._sparsify_sample(space, dense_sample)
         else:
             sparse_sample = dense_sample
@@ -501,6 +506,33 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             return self.sparse_flatten_sample(data)
         return data
 
+    @property
+    def sparse_space(self):
+        return self._sparse_space
+
+    @property
+    def dense_space(self):
+        return self._dense_space
+
+    @property
+    def is_sparse(self):
+        return self._is_sparse
+
+    @property
+    def sparse_mode(self):
+        return self._mode
+
+    @sparse_mode.setter
+    def sparse_mode(self, mode):
+        assert mode in ["sparse", "dense"]
+
+        self._mode = mode
+
+        if mode == "sparse":
+            self.spaces = self._sparse_space.spaces
+        elif mode == "dense":
+            self.spaces = self._dense_space.spaces
+
 
 class SparseFlatteningTuple(FlatteningTuple, SparseFlatteningCompositeSpace):
 
@@ -512,13 +544,14 @@ class SparseFlatteningTuple(FlatteningTuple, SparseFlatteningCompositeSpace):
 
         self.spaces = self._wrap_sub_spaces(Tuple(self.spaces)).spaces
 
-        self.is_sparse = False
+        self._is_sparse = False
         self.sparse_idxs, sparse_space = self._sparsify_tuple_space(Tuple(self.spaces))
+        self._dense_space = Tuple(self.spaces)
 
-        if self.is_sparse:
-            self.sparse_space = sparse_space
+        if self._is_sparse:
+            self._sparse_space = sparse_space
         else:
-            self.sparse_space = self
+            self._sparse_space = self._dense_space
 
 
 class SparseFlatteningDict(FlatteningDict, SparseFlatteningCompositeSpace):
@@ -531,13 +564,14 @@ class SparseFlatteningDict(FlatteningDict, SparseFlatteningCompositeSpace):
 
         self.spaces = self._wrap_sub_spaces(Dict(self.spaces)).spaces
 
-        self.is_sparse = False
-        sparse_space  = self._sparsify_dict_space(Dict(spaces))
+        self._is_sparse   = False
+        sparse_space      = self._sparsify_dict_space(Dict(spaces))
+        self._dense_space = Dict(self.spaces)
 
-        if self.is_sparse:
-            self.sparse_space = sparse_space
+        if self._is_sparse:
+            self._sparse_space = sparse_space
         else:
-            self.sparse_space = self
+            self._sparse_space = self._dense_space
 
 
 class ShapelyDiscrete(Discrete):
