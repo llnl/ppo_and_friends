@@ -119,7 +119,7 @@ class FlatteningCompositeSpace():
         super().__init__()
 
         self.supported_spaces = [
-            #Discrete,
+            Discrete,
             MultiDiscrete,
             MultiBinary,
             Box,
