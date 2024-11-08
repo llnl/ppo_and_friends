@@ -117,7 +117,7 @@ class FlatteningCompositeSpace(ABC):
         """
         super().__init__()
 
-        self._auto_flatten   = False
+        self._auto_flatten   = True
         self._flattened_size = None
 
     @abstractmethod
@@ -388,7 +388,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         self._is_sparse    = False
         self._sparse_space = None
         self._dense_space  = None
-        self._mode         = "dense"
+        self._mode         = "sparse"
 
     def _sparsify_tuple_space(self, tuple_space):
         """
