@@ -113,7 +113,7 @@ def gym_space_to_gymnasium_space(space):
 
 class FlatteningCompositeSpace():
 
-    def __init__(self, *args, auto_flatten=False, **kw_args):
+    def __init__(self, *args, **kw_args):
         """
         """
         super().__init__()
@@ -127,7 +127,7 @@ class FlatteningCompositeSpace():
             Tuple,
         ]
 
-        self.auto_flatten = auto_flatten
+        self._auto_flatten = False
 
     def _space_is_supported(self, space):
         """
@@ -229,6 +229,14 @@ class FlatteningCompositeSpace():
                 space.spaces, seed = space._np_random)
 
         return space
+
+    @property
+    def auto_flatten(self):
+        return self._auto_flatten
+
+    @auto_flatten.setter
+    def set_auto_flatten(self, auto_flatten):
+        self._auto_flatten = auto_flatten
 
 
 class FlatteningTuple(Tuple, FlatteningCompositeSpace):
@@ -534,34 +542,16 @@ class SparseFlatteningDict(FlatteningDict, SparseFlatteningCompositeSpace):
 
 class ShapelyDiscrete(Discrete):
 
-    def __init__(
-        self,
-        n,
-        seed  = None,
-        start = 0,
-    ):
+    def __init__(self, *args, **kw_args):
         """
         """
-        assert np.issubdtype(
-            type(n), np.integer
-        ), f"Expects `n` to be an integer, actual dtype: {type(n)}"
-        assert n > 0, "n (counts) have to be positive"
-        assert np.issubdtype(
-            type(start), np.integer
-        ), f"Expects `start` to be an integer, actual type: {type(start)}"
-
-        self.n     = np.int64(n)
-        self.start = np.int64(start)
-
-        super(Discrete, self).__init__((1,), np.int64, seed)
+        super().__init__(*args, **kw_args)
 
     def sample(self, *args, **kw_args):
         """
         """
-        return np.array((super.sample(*args, **kw_args),))
+        return np.array((super().sample(*args, **kw_args),))
 
-    # FIXME: should we instead try to override the shape method like we do
-    # for the FlatteningTuple?
-    #@property
-    #def shape(self):
-    #    return (1,)
+    @property
+    def shape(self):
+        return (1,)
