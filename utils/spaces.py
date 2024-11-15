@@ -296,7 +296,7 @@ class FlatteningCompositeSpace(ABC):
         """
         """
         for space in spaces:
-            if isinstance(space, SparseFlatteningCompositeSpace):
+            if isinstance(space, FlatteningCompositeSpace):
                 space._update_flattened_size()
 
     def _update_flattened_size(self):
@@ -306,8 +306,7 @@ class FlatteningCompositeSpace(ABC):
         self._auto_flatten   = True
         self._flattened_size = self.sample().size
         self._auto_flatten   = temp
-        self._update_flattened_sizes(self._dense_space.spaces)
-        self._update_flattened_sizes(self._sparse_space.spaces)
+        self._update_flattened_sizes(self.spaces)
 
     @property
     def auto_flatten(self):
@@ -430,59 +429,6 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         self._dense_space  = None
         self._mode         = "sparse"
 
-    #FIXME: delete
-    def _sparsify_tuple_or_dict_space(self, space):
-        """
-        """
-        if isinstance(space, dict) or isinstance(space, Dict):
-            space_iter = space.keys()
-        else:
-            space_iter = iter(range(len(space)))
-
-        sparse_spaces = []
-        sparse_idxs   = np.zeros(len(space)).astype(np.int32)
-        sparse_sizes  = np.zeros(len(space)).astype(np.int32)
-        for s_idx, iter_i in enumerate(space_iter):
-            sub_space = space[iter_i]
-
-            if self._space_is_supported(sub_space):
-
-                if self._is_composite_space(sub_space):
-                    sub_space = self._sparsify_composite_space(sub_space)
-
-                if sub_space is not None:
-                    sparse_spaces.append(sub_space)
-                    sparse_idxs[s_idx] = 1
-
-                    if self._is_composite_space(sub_space):
-                        sparse_sizes[s_idx] = 1
-
-                    elif (isinstance(sub_space, Box) or
-                        isinstance(sub_space, MultiDiscrete) or
-                        isinstance(sub_space, MultiBinary)):
-
-                        size = functools.reduce(lambda a, b : a * b, sub_space.shape)
-                        sparse_sizes[s_idx] = size
-
-                    elif isinstance(sub_space, Discrete):
-                        sparse_sizes[s_idx] = 1
-
-                    else:
-                        raise TypeError(f"Unknown space {sub_space} of type {type(sub_space)} encountered!")
-            else:
-                #
-                # For unsupported spaces, we need to try to calculate its size.
-                #
-                sparse_sizes[s_idx] = self.flatten_sample(sub_space.sample()).size
-                self._is_sparse     = True
-
-                msg  = f"\nWARNING: encountered a Tuple space containing an unsupported "
-                msg += f"space type of {type(sub_space)}. It will be ignored when "
-                msg += f"flattening.\n"
-                sys.stderr.write(msg)
-
-        return sparse_idxs, sparse_sizes, sparse_spaces
-
     def _sparsify_tuple_space(self, tuple_space):
         """
         """
@@ -547,7 +493,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
                     sparse_idxs[s_idx] = 1
 
                     if self._is_composite_space(space):
-                        sparse_sizes[s_idx] = self._calculate_sample_sizes(space.spaces).sum()
+                        sparse_sizes[s_idx] = 1
 
                     elif (isinstance(space, Box) or
                         isinstance(space, MultiDiscrete) or
@@ -639,7 +585,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             sparse_sample = {}
             for key in space._sparse_space.keys():
                 #print(f"KEEPING SAMPLE {key} WITH SPACE {space.spaces[key]}, SENDING DENSE {dense_sample[key]}")
-                sparse_sample[key] = self._sparsify_sample(space.spaces[key], dense_sample[key])
+                sparse_sample[key] = self._sparsify_sample(space._dense_space.spaces[key], dense_sample[key])
             #start_idx     = 0
             #for idx, key in enumerate(space.spaces.keys()):
             #    stop_idx = space.sparse_sizes[idx]
@@ -735,6 +681,29 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         #print(f"SETTING BACK TO {temp}")#FIXME
         #self.mode  = temp
 
+    #FIXME: remove after debugging
+    def _get_modes(self, spaces, st, indent):
+        """
+        """
+
+        if isinstance(spaces, dict) or isinstance(spaces, Dict):
+            space_iter = spaces.keys()
+        else:
+            space_iter = iter(range(len(spaces)))
+
+        for iter_i in space_iter:
+            if isinstance(spaces[iter_i], SparseFlatteningCompositeSpace):
+                spaces[iter_i].get_mode(st, indent)
+
+    #FIXME: remove after debugging
+    def get_mode(self, st="", indent=""):
+        """
+        """
+        print(f"{indent}MODE: {self._mode} ({st})")#FIXME
+        self._get_modes(self.spaces, "spaces", indent + "    ")
+        self._get_modes(self._dense_space.spaces, "dense_spaces", indent + "    ")
+        self._get_modes(self._sparse_space.spaces, "sparse_spaces", indent + "    ")
+
     @property
     def sparse_space(self):
         return self._sparse_space
@@ -767,37 +736,11 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     @mode.setter
     def mode(self, mode):
-        #FIXME : this is missing some spaces!
-        #print(f"\nSETTING MODE FOR {self} of type {self.__class__} with address {id(self)}")#FIXME
         assert mode in ["sparse", "dense"]
 
-        self._mode = mode
-
+        self._mode                = mode
         self._sparse_space.spaces = self._update_space_modes(self._sparse_space.spaces, mode)
         self._dense_space.spaces  = self._update_space_modes(self._dense_space.spaces, mode)
-
-        if mode == "sparse":
-            self.spaces = self._sparse_space.spaces
-
-        elif mode == "dense":
-            self.spaces = self._dense_space.spaces
-
-        #if isinstance(self.spaces, dict) or isinstance(self.spaces, Dict):
-        #    space_iter = self.spaces.keys()
-        #else:
-        #    space_iter = iter(range(len(self.spaces)))
-
-        #for iter_i in space_iter:
-        #    if isinstance(self.spaces[iter_i], SparseFlatteningCompositeSpace):
-        #        self.spaces[iter_i].mode = mode
-
-
-
-        #for iter_i in space_iter:
-        #    if isinstance(self.spaces[iter_i], SparseFlatteningCompositeSpace):
-        #        print(f"SUB SPACE MODE: {self.spaces[iter_i].mode}")#FIXME
-
-        #self._update_flattened_size()
 
 
 class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
@@ -827,19 +770,12 @@ class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
         """
         Sample the space.
         """
-        #print(f"\nINSIDE SFT SAMPLE")
-        #print(f"MODE: {self.mode}")
-        #print(f"SUPER TYPE: {super().__self__.__class__}")#FIXME
-        #print(f"SELF SPACE: {self}")#FIXME
-        #print(f"ADDRESS: {id(self)}")
-        data = super().sample()
-        #print(f"SFT SUPER SAMPLE: {data}")#FIXME
-
         if self._mode == "sparse":
-            #print(f"SPARSIFYING")
-            return self.flatten_sample(data)
+            return self.flatten_sample(self._sparse_space.sample())
 
-        elif self._auto_flatten:
+        data = self._dense_space.sample()
+
+        if self._auto_flatten:
             return self.sparse_flatten_sample(data)
 
         return data
@@ -876,19 +812,12 @@ class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
         """
         Sample the space.
         """
-        #print(f"\nINSIDE SFD SAMPLE")
-        #print(f"MODE: {self.mode}")
-        #print(f"SUPER TYPE: {super().__self__.__class__}")#FIXME
-        #print(f"SELF SPACE: {self}")#FIXME
-        #print(f"ADDRESS: {id(self)}")
-        data = super().sample()
-        #print(f"SFD SUPER SAMPLE: {data}")#FIXME
-
         if self._mode == "sparse":
-            #print(f"SPARSIFYING")
-            return self.flatten_sample(data)
+            return self.flatten_sample(self._sparse_space.sample())
 
-        elif self._auto_flatten:
+        data = self._dense_space.sample()
+
+        if self._auto_flatten:
             return self.sparse_flatten_sample(data)
 
         return data
