@@ -668,18 +668,12 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def _update_flattened_size(self):
         """
         """
-        #FIXME: this is breaking things...
         temp       = self._mode
-        #print(f"MODE IS {temp}")
-        #print(f"CHANGING MODE FROM {temp} to sparse")#FIXME
-        #self.mode  = "sparse"
-        #self._flattened_size = self.sample().size
-
-        ##self._update_flattened_sizes(self._dense_space.spaces)
-        ##self._update_flattened_sizes(self._sparse_space.spaces)
-
-        #print(f"SETTING BACK TO {temp}")#FIXME
-        #self.mode  = temp
+        self.mode  = "sparse"
+        self._flattened_size = self.sample().size
+        self._update_flattened_sizes(self._dense_space.spaces)
+        self._update_flattened_sizes(self._sparse_space.spaces)
+        self.mode  = temp
 
     #FIXME: remove after debugging
     def _get_modes(self, spaces, st, indent):
