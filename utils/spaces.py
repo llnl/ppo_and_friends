@@ -371,7 +371,6 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
         """
         Sample the space.
         """
-        #print(f"CALLING FLATTENING TUPLE SAMPLE")#FIXME
         data = super().sample()
         if self._auto_flatten:
             return self.flatten_sample(data)
@@ -407,7 +406,6 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
         """
         Sample the space.
         """
-        #print(f"CALLING FLATTENING DICT SAMPLE")#FIXME
         data = super().sample()
         if self._auto_flatten:
             return self.flatten_sample(data)
@@ -433,6 +431,8 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         """
         """
         sparse_spaces = []
+        # TODO: revert sparse idxs to sparse only. Remove sparse_sizes since
+        # no longer needed.
         sparse_idxs   = np.zeros(len(tuple_space)).astype(np.int32)
         sparse_sizes  = np.zeros(len(tuple_space)).astype(np.int32)
         for s_idx, space in enumerate(tuple_space):
@@ -547,31 +547,13 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def _sparsify_sample(self, space, dense_sample):
         """
         """
-        ##print(f"\nSPARSIFYING SAMPLE {dense_sample}")#FIXME
-        #print(f"SPACE: {space}")
-
         if isinstance(space, SparseFlatteningTuple):
-            #print(f"SFT")#FIXME
             sparse_sample = []
             start_idx     = 0
-            #print(f"SPACES SPARSE SIZES: {space.sparse_sizes}")
+            #TODO: I think we can go back to just tracking sparse idxs only.
             for idx, keeper in enumerate(space.sparse_idxs):
 
-                #stop_idx = start_idx + space.sparse_sizes[idx]
-                #if keeper:
-                #    print(f"KEEPING SAMPLE {idx} WITH SPACE {space.spaces[idx]}, SENDING DENSE RANGE {start_idx} : {stop_idx}")
-                #    if space.sparse_sizes[idx] > 1:
-                #        sparse_sample.append(
-                #            self._sparsify_sample(
-                #                space.spaces[idx], dense_sample[start_idx : stop_idx]))
-                #    else:
-                #        sparse_sample.append(
-                #            self._sparsify_sample(
-                #                space.spaces[idx], dense_sample[start_idx]))
-                #start_idx = stop_idx
-
                 if keeper:
-                    #print(f"KEEPING SAMPLE {idx} WITH SPACE {space.spaces[idx]}, SENDING DENSE {dense_sample[idx]}")
                     sparse_sample.append(
                         self._sparsify_sample(
                             space._dense_space.spaces[idx], dense_sample[idx]))
@@ -580,34 +562,20 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
             return tuple(sparse_sample)
 
         elif isinstance(space, SparseFlatteningDict):
-            #print(f"SFD")#FIXME
 
             sparse_sample = {}
             for key in space._sparse_space.keys():
-                #print(f"KEEPING SAMPLE {key} WITH SPACE {space.spaces[key]}, SENDING DENSE {dense_sample[key]}")
                 sparse_sample[key] = self._sparsify_sample(space._dense_space.spaces[key], dense_sample[key])
-            #start_idx     = 0
-            #for idx, key in enumerate(space.spaces.keys()):
-            #    stop_idx = space.sparse_sizes[idx]
-
-            #    if space.sparse_idxs[idx]:
-            #        print(f"KEEPING SAMPLE {idx} WITH SPACE {space.spaces[key]}, SENDING DENSE RANGE {start_idx} : {stop_idx}")
-            #        sparse_sample[key] = self._sparsify_sample(space.spaces[key], dense_sample[start_idx : stop_idx])
-
-            #    start_idx = start_idx + stop_idx
 
             return dict(sparse_sample)
 
         elif isinstance(space, Tuple) or isinstance(space, Dict):
-            ##print(f"TUPLE")#FIXME
             return dense_sample
 
         elif isinstance(dense_sample, np.ndarray):
-            #print(f"NDARRAY")#FIXME
             return dense_sample
 
         elif isinstance(dense_sample, numbers.Number):
-            #print(f"NUMBER")#FIXME
             return np.array([dense_sample])
 
         else:
@@ -628,10 +596,6 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def sparse_flatten_sample(self, dense_sample):
         """
         """
-        #FIXME:
-        #if isinstance(dense_sample, np.ndarray):
-        #    return dense_sample
-
         return self._sparse_flatten_sample(self, dense_sample)
 
     def _wrap_space(self, space):
@@ -675,8 +639,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         self._update_flattened_sizes(self._sparse_space.spaces)
         self.mode  = temp
 
-    #FIXME: remove after debugging
-    def _get_modes(self, spaces, st, indent):
+    def _get_space_tree_strings(self, spaces, str_tree, space_type, indent):
         """
         """
 
@@ -687,16 +650,18 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
         for iter_i in space_iter:
             if isinstance(spaces[iter_i], SparseFlatteningCompositeSpace):
-                spaces[iter_i].get_mode(st, indent)
+                str_tree = spaces[iter_i].get_tree_str(str_tree, space_type, indent)
 
-    #FIXME: remove after debugging
-    def get_mode(self, st="", indent=""):
+        return str_tree
+
+    def get_tree_str(self, str_tree="", space_type="", indent=""):
         """
         """
-        print(f"{indent}MODE: {self._mode} ({st})")#FIXME
-        self._get_modes(self.spaces, "spaces", indent + "    ")
-        self._get_modes(self._dense_space.spaces, "dense_spaces", indent + "    ")
-        self._get_modes(self._sparse_space.spaces, "sparse_spaces", indent + "    ")
+        str_tree = f"\n{str_tree}{indent}{type(self)} {self._mode} mode ({space_type})\n"
+        str_tree = self._get_space_tree_strings(self.spaces, str_tree, "spaces", indent + "    ")
+        str_tree = self._get_space_tree_strings(self._dense_space.spaces, str_tree, "dense_spaces", indent + "    ")
+        str_tree = self._get_space_tree_strings(self._sparse_space.spaces, str_tree, "sparse_spaces", indent + "    ")
+        return str_tree
 
     @property
     def sparse_space(self):
