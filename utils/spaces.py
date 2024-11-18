@@ -434,10 +434,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         """
         """
         sparse_spaces = []
-        # TODO: revert sparse idxs to sparse only. Remove sparse_sizes since
-        # no longer needed.
-        sparse_idxs   = np.zeros(len(tuple_space)).astype(np.int32)
-        sparse_sizes  = np.zeros(len(tuple_space)).astype(np.int32)
+        sparse_idxs   = []
         for s_idx, space in enumerate(tuple_space):
             if self._space_is_supported(space):
 
@@ -446,43 +443,21 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
                 if space is not None:
                     sparse_spaces.append(space)
-                    sparse_idxs[s_idx] = 1
-
-                    if self._is_composite_space(space):
-                        sparse_sizes[s_idx] = 1
-
-                    elif (isinstance(space, Box) or
-                        isinstance(space, MultiDiscrete) or
-                        isinstance(space, MultiBinary)):
-
-                        size = functools.reduce(lambda a, b : a * b, space.shape)
-                        sparse_sizes[s_idx] = size
-
-                    elif isinstance(space, Discrete):
-                        sparse_sizes[s_idx] = 1
-
-                    else:
-                        raise TypeError(f"Unknown space {space} of type {type(space)} encountered!")
+                    sparse_idxs.append(s_idx)
             else:
-                #
-                # For unsupported spaces, we need to try to calculate its size.
-                #
-                sparse_sizes[s_idx] = self.flatten_sample(space.sample()).size
-                self._is_sparse     = True
+                self._is_sparse = True
 
                 msg  = f"\nWARNING: encountered a Tuple space containing an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
                 msg += f"flattening.\n"
                 sys.stderr.write(msg)
 
-        return sparse_idxs, sparse_sizes, Tuple(sparse_spaces)
+        return np.array(sparse_idxs), Tuple(sparse_spaces)
 
     def _sparsify_dict_space(self, dict_space):
         """
         """
         sparse_spaces = {}
-        sparse_idxs   = np.zeros(len(dict_space.keys())).astype(np.int32)
-        sparse_sizes  = np.zeros(len(dict_space.keys())).astype(np.int32)
         for s_idx, key in enumerate(dict_space):
             space = dict_space[key]
 
@@ -493,46 +468,26 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
                 if space is not None:
                     sparse_spaces[key] = space
-                    sparse_idxs[s_idx] = 1
 
-                    if self._is_composite_space(space):
-                        sparse_sizes[s_idx] = 1
-
-                    elif (isinstance(space, Box) or
-                        isinstance(space, MultiDiscrete) or
-                        isinstance(space, MultiBinary)):
-
-                        size = functools.reduce(lambda a, b : a * b, space.shape)
-                        sparse_sizes[s_idx] = size
-
-                    elif isinstance(space, Discrete):
-                        sparse_sizes[s_idx] = 1
-
-                    else:
-                        raise TypeError(f"Unknown space {space} of type {type(space)} encountered!")
             else:
-                #
-                # For unsupported spaces, we need to try to calculate its size.
-                #
-                sparse_sizes[s_idx] = self.flatten_sample(space.sample()).size
-                self._is_sparse     = True
+                self._is_sparse = True
 
                 msg  = f"\nWARNING: encountered a Tuple space containing an unsupported "
                 msg += f"space type of {type(space)}. It will be ignored when "
                 msg += f"flattening.\n"
                 sys.stderr.write(msg)
 
-        return sparse_idxs, sparse_sizes, Dict(sparse_spaces)
+        return Dict(sparse_spaces)
 
     def _sparsify_composite_space(self, composite):
         """
         """
         if isinstance(composite, Dict):
-            _, _, sparse_dict = self._sparsify_dict_space(composite)
+            sparse_dict = self._sparsify_dict_space(composite)
             return sparse_dict
 
         elif isinstance(composite, Tuple):
-            _, _, sparse_tuple = self._sparsify_tuple_space(composite)
+            _, sparse_tuple = self._sparsify_tuple_space(composite)
             return sparse_tuple
 
         self._is_sparse = True
@@ -553,13 +508,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         if isinstance(space, SparseFlatteningTuple):
             sparse_sample = []
             start_idx     = 0
-            #TODO: I think we can go back to just tracking sparse idxs only.
-            for idx, keeper in enumerate(space.sparse_idxs):
-
-                if keeper:
-                    sparse_sample.append(
-                        self._sparsify_sample(
-                            space._dense_space.spaces[idx], dense_sample[idx]))
+            for s_idx in space.sparse_idxs:
+                sparse_sample.append(
+                    self._sparsify_sample(
+                        space._dense_space.spaces[s_idx], dense_sample[s_idx]))
 
 
             return tuple(sparse_sample)
@@ -720,7 +672,7 @@ class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
         self.spaces = self._wrap_sub_spaces(Tuple(self.spaces)).spaces
 
         self._is_sparse = False
-        self.sparse_idxs, self.sparse_sizes, sparse_space = self._sparsify_tuple_space(Tuple(self.spaces))
+        self.sparse_idxs, sparse_space = self._sparsify_tuple_space(Tuple(self.spaces))
         self._dense_space = Tuple(self.spaces)
 
         if self._is_sparse:
@@ -762,7 +714,7 @@ class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
         self.spaces = self._wrap_sub_spaces(Dict(self.spaces)).spaces
 
         self._is_sparse   = False
-        self.sparse_idxs, self.sparse_sizes, sparse_space = self._sparsify_dict_space(Dict(spaces))
+        sparse_space = self._sparsify_dict_space(Dict(spaces))
         self._dense_space = Dict(self.spaces)
 
         if self._is_sparse:
