@@ -183,7 +183,10 @@ class FlatteningCompositeSpace(ABC):
             msg += f"encountered! Bailing..."
             raise TypeError(msg)
 
-        return np.concatenate(flattened_data)
+        if len(flattened_data) > 0:
+            return np.concatenate(flattened_data)
+        else:
+            return np.zeros(0)
 
     def _is_composite_space(self, space):
         """
