@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode ()
+    <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (spaces)
+        <class 'ppo_and_friends.utils.spaces.SparseFlatteningTuple'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (dense_spaces)
+        <class 'ppo_and_friends.utils.spaces.SparseFlatteningTuple'> sparse mode (dense_spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (dense_spaces)
+    <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (dense_spaces)
+        <class 'ppo_and_friends.utils.spaces.SparseFlatteningTuple'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (dense_spaces)
+        <class 'ppo_and_friends.utils.spaces.SparseFlatteningTuple'> sparse mode (dense_spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (spaces)
+            <class 'ppo_and_friends.utils.spaces.SparseFlatteningDict'> sparse mode (dense_spaces)
