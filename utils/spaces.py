@@ -596,6 +596,8 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
     def sparse_flatten_sample(self, dense_sample):
         """
         """
+        if isinstance(dense_sample, np.ndarray):
+            return dense_sample
         return self._sparse_flatten_sample(self, dense_sample)
 
     def _wrap_space(self, space):
