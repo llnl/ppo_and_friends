@@ -62,14 +62,17 @@ def gym_space_to_gymnasium_space(space):
     --------
     The input space converted to gymnasium.
     """
-    if issubclass(type(space), old_gym.spaces.Box):
+    if isinstance(space, FlatteningCompositeSpace):
+        return space
+
+    if isinstance(space, old_gym.spaces.Box):
         space = gym.spaces.Box(
             low   = space.low,
             high  = space.high,
             shape = space.shape,
             dtype = space.dtype)
 
-    elif issubclass(type(space), old_gym.spaces.Discrete):
+    elif isinstance(space, old_gym.spaces.Discrete):
         try:
             space = gym.spaces.Discrete(
                 n     = space.n,
@@ -78,16 +81,16 @@ def gym_space_to_gymnasium_space(space):
             space = gym.spaces.Discrete(
                 n = space.n)
 
-    elif issubclass(type(space), old_gym.spaces.MultiBinary):
+    elif isinstance(space, old_gym.spaces.MultiBinary):
         space = gym.spaces.MultiBinary(
             n = space.n)
 
-    elif issubclass(type(space), old_gym.spaces.MultiDiscrete):
+    elif isinstance(space, old_gym.spaces.MultiDiscrete):
         space = gym.spaces.MultiDiscrete(
             nvec  = space.nvec,
             dtype = space.dtype)
 
-    elif issubclass(type(space), old_gym.spaces.Dict):
+    elif isinstance(space, old_gym.spaces.Dict):
         new_space = gym.spaces.Dict()
 
         for key in space:
@@ -95,7 +98,7 @@ def gym_space_to_gymnasium_space(space):
 
         space = new_space
 
-    elif issubclass(type(space), old_gym.spaces.Tuple):
+    elif isinstance(space, old_gym.spaces.Tuple):
         new_space = []
 
         for subspace in space:
@@ -103,13 +106,39 @@ def gym_space_to_gymnasium_space(space):
 
         space = gym.spaces.Tuple(new_space)
 
-    else:
-        msg  = f"conversion of gym space {space} to "
-        msg += f"gymnasium is not currently supported. Contact "
-        msg += f"a developer to extend support for this space."
-        raise TypeError(msg)
-
     return space
+
+
+def is_composite_space(space):
+    """
+    """
+    if (isinstance(space, Dict) or
+        isinstance(space, Tuple) or
+        isinstance(space, Sequence) or
+        isinstance(space, Graph)):
+        return True
+    return False
+
+
+def exchange_composite_obs_spaces(env):
+
+    if is_composite_space(env.observation_space):
+        if isinstance(env.observation_space, Dict):
+            env.observation_space = SparseFlatteningDict(
+                env.observation_space.spaces, env.observation_space._np_random)
+            env.observation_space.auto_flatten = False
+
+        elif isinstance(env.observation_space, Tuple):
+            env.observation_space = SparseFlatteningTuple(
+                env.observation_space.spaces, env.observation_space._np_random)
+            env.observation_space.auto_flatten = False
+
+        else:
+            msg = "Unsupported composite space, {env.observation_space} encountered."
+            raise TypeError(msg)
+
+    return env
+
 
 class FlatteningCompositeSpace(ABC):
 
@@ -187,16 +216,6 @@ class FlatteningCompositeSpace(ABC):
             return np.concatenate(flattened_data)
         else:
             return np.zeros(0)
-
-    def _is_composite_space(self, space):
-        """
-        """
-        if (isinstance(space, Dict) or
-            isinstance(space, Tuple) or
-            isinstance(space, Sequence) or
-            isinstance(space, Graph)):
-            return True
-        return False
 
     def _wrap_sub_spaces(self, space):
         """
@@ -438,7 +457,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
         for s_idx, space in enumerate(tuple_space):
             if self._space_is_supported(space):
 
-                if self._is_composite_space(space):
+                if is_composite_space(space):
                     space = self._sparsify_composite_space(space)
 
                 if space is not None:
@@ -463,7 +482,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
             if self._space_is_supported(space):
 
-                if self._is_composite_space(space):
+                if is_composite_space(space):
                     space = self._sparsify_composite_space(space)
 
                 if space is not None:
@@ -758,3 +777,4 @@ class ShapelyDiscrete(Discrete):
     @property
     def shape(self):
         return (1,)
+
