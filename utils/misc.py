@@ -4,6 +4,7 @@ import torch
 from ppo_and_friends.utils.stats import RunningMeanStd
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, MultiBinary, Tuple
 import gymnasium.spaces as spaces
+import ppo_and_friends.utils.spaces as ppoaf_spaces
 import os
 import sys
 import pickle
@@ -27,7 +28,7 @@ def get_space_dtype_str(action_space):
     --------
     A string representing the action space dtype.
     """
-    if issubclass(type(action_space), Tuple):
+    if isinstance(action_space, Tuple):
         return "mixed"
 
     elif np.issubdtype(action_space.dtype, np.floating):
@@ -213,21 +214,23 @@ def get_space_shape(space):
     int
         An inferred shape of the space.
     """
-    space_type = type(space)
-
-    if issubclass(space_type, Box):
+    if isinstance(space, Box):
         return space.shape
 
-    elif issubclass(space_type, Discrete):
+    elif isinstance(space, Discrete):
         return (1,)
 
-    elif issubclass(space_type, MultiBinary):
+    elif isinstance(space, MultiBinary):
         return (space.n,)
 
-    elif issubclass(space_type, MultiDiscrete):
+    elif (isinstance(space, MultiDiscrete) or
+        isinstance(space, ppoaf_spaces.FlatteningDict) or
+        isinstance(space, ppoaf_spaces.FlatteningTuple) or
+        isinstance(space, ppoaf_spaces.SparseFlatteningDict) or
+        isinstance(space, ppoaf_spaces.SparseFlatteningTuple)):
         return space.shape
 
-    elif issubclass(space_type, Tuple):
+    elif isinstance(space, Tuple):
 
         space_shapes = []
         for sub_space in space:
@@ -311,19 +314,17 @@ def get_action_prediction_shape(space):
     tuple:
         The shape of our actor's prediction.
     """
-    space_type = type(space)
-
-    if issubclass(space_type, Box):
+    if isinstance(space, Box):
         return space.shape
 
-    elif (issubclass(space_type, Discrete) or
-        issubclass(space_type, MultiBinary)):
+    elif (isinstance(space, Discrete) or
+        isinstance(space, MultiBinary)):
         return (space.n,)
 
-    elif issubclass(space_type, MultiDiscrete):
+    elif isinstance(space, MultiDiscrete):
         return (functools.reduce(lambda a, b: a+b, space.nvec),)
 
-    elif issubclass(space_type, Tuple):
+    elif isinstance(space, Tuple):
 
         pred_shapes = []
         for sub_space in space:
