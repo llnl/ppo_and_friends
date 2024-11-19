@@ -559,12 +559,14 @@ class SingleAgentGymSparseRewardWrapper(SingleAgentGymWrapper):
 
         obs, critic_obs, reward, terminated, truncated, info = super()._wrap_gym_step(*args)
 
+        triggered = False
         if reward[agent_id] >= self.reward_trigger_min and reward[agent_id] <= self.reward_trigger_max:
+            triggered = True
             self.trigger_count += 1
 
         reward[agent_id] = self.sparse_value
 
-        if self.trigger_count % self.reward_freq:
+        if triggered and self.trigger_count % self.reward_freq == 0.0:
             reward[agent_id] = self.reward_value
 
         return obs, critic_obs, reward, terminated, truncated, info
