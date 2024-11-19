@@ -428,6 +428,14 @@ class SingleAgentGymWrapper(PPOGymWrapper):
         --------
         The agent observations.
         """
+        #
+        # Black magic: some environments (minigrid...) have dict observations.
+        # We replace the observation space with SparseFlatteningDict, which
+        # allows us to flatten and remove unsupported sub-spaces.
+        #
+        if isinstance(obs, dict):
+            obs = self.env.observation_space.sparse_flatten_sample(obs)
+
         if isinstance(obs, numbers.Number):
             obs = np.array([obs])
         return obs
@@ -833,6 +841,15 @@ class MultiAgentGymWrapper(PPOGymWrapper):
         The agent observations.
         """
         for i in range(self.num_agents):
+
+            #
+            # Black magic: some environments (minigrid...) have dict observations.
+            # We replace the observation space with SparseFlatteningDict, which
+            # allows us to flatten and remove unsupported sub-spaces.
+            #
+            if isinstance(obs[i], dict):
+                obs[i] = self.env.observation_space.sparse_flatten_sample(obs[i])
+
             if isinstance(obs[i], numbers.Number):
                 obs[i] = np.array([obs[i]])
         return obs
