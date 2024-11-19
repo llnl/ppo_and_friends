@@ -134,6 +134,13 @@ def test_dense_dict(rebase=False):
     assert flattened_sample.size == sfd._flattened_size, err_msg
 
     err_msg = f"""
+    Expected flattened_size attribute to match the shape attribute.
+    flatttened_size: {sfd._flattened_size}
+    shape: {sfd.shape}
+    """
+    assert flattened_sample.shape == (sfd._flattened_size,), err_msg
+
+    err_msg = f"""
     Expected sparse flattened sample to not have any inf values, but found:
     {flattened_sample}
     """
@@ -172,6 +179,13 @@ def test_sparse_dict(rebase=False):
     assert np.isclose(sample, baseline).all(), err_msg
     
     flattened_sample = sfd.sparse_flatten_sample(sample)
+
+    err_msg = f"""
+    Expected flattened_size attribute to match the shape attribute.
+    flatttened_size: {sfd._flattened_size}
+    shape: {sfd.shape}
+    """
+    assert flattened_sample.shape == (sfd._flattened_size,), err_msg
 
     err_msg = f"""
     Expected sparse flattened sample to not have any inf values, but found:
