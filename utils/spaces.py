@@ -16,6 +16,17 @@ num_procs = comm.Get_size()
 
 def validate_observation_space(env):
     """
+    Validate the observation space of the given environment, and replace
+    any spaces/sub-spaces that we need to.
+
+    Parameters:
+    -----------
+    env: environment
+        The environment to inspect.
+
+    Returns:
+    --------
+    The input environment with an (possibly) updated observation space.
     """
     is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.spaces.Discrete
     get_space_args    = lambda s : (s.n, s.start, s._np_random)
@@ -24,22 +35,28 @@ def validate_observation_space(env):
         n, start, seed = get_space_args(env.observation_space)
         env.observation_space = ShapelyDiscrete(n = n, start = start, seed = seed)
 
-    elif type(env.observation_space) == Tuple:
-        new_space = []
+    elif isinstance(env.observation_space, Tuple):
+        new_spaces = []
         for i in range(len(env.observation_space)):
             if is_discrete_space(env.observation_space[i]):
                 n, start, seed = get_space_args(env.observation_space[i])
-                new_space.append(ShapelyDiscrete(n = n, start = start, seed = seed))
+                new_spaces.append(ShapelyDiscrete(n = n, start = start, seed = seed))
             else:
-                new_space.append(env.observation_space[i])
+                new_spaces.append(env.observation_space[i])
 
-        env.observation_space = Tuple(new_space)
+        env.observation_space = SparseFlatteningTuple(
+            new_spaces, env.observation_space._np_random)
+        env.observation_space.auto_flatten = False
 
     elif type(env.observation_space) == Dict:
         for key in env.observation_space:
             if is_discrete_space(env.observation_space[key]):
                 n, start, seed = get_space_args(env.observation_space[key])
                 env.observation_space[key] = ShapelyDiscrete(n = n, start = start, seed = seed)
+
+        env.observation_space = SparseFlatteningDict(
+            env.observation_space.spaces, env.observation_space._np_random)
+        env.observation_space.auto_flatten = False
 
     if hasattr(env, "env"):
         env.env = validate_observation_space(env.env)
@@ -111,6 +128,16 @@ def gym_space_to_gymnasium_space(space):
 
 def is_composite_space(space):
     """
+    Is the given space a composite space?
+
+    Parameters:
+    -----------
+    space: gymnasium.spaces.Space
+        The space to check
+
+    Returns:
+    --------
+    True iff the space is composite.
     """
     if (isinstance(space, Dict) or
         isinstance(space, Tuple) or
@@ -120,31 +147,13 @@ def is_composite_space(space):
     return False
 
 
-def exchange_composite_obs_spaces(env):
-
-    if is_composite_space(env.observation_space):
-        if isinstance(env.observation_space, Dict):
-            env.observation_space = SparseFlatteningDict(
-                env.observation_space.spaces, env.observation_space._np_random)
-            env.observation_space.auto_flatten = False
-
-        elif isinstance(env.observation_space, Tuple):
-            env.observation_space = SparseFlatteningTuple(
-                env.observation_space.spaces, env.observation_space._np_random)
-            env.observation_space.auto_flatten = False
-
-        else:
-            msg = "Unsupported composite space, {env.observation_space} encountered."
-            raise TypeError(msg)
-
-    return env
-
-
 class FlatteningCompositeSpace(ABC):
+    """
+    An abstract base class for creating composite spaces
+    that can flatten their samples.
+    """
 
     def __init__(self, *args, **kw_args):
-        """
-        """
         super().__init__()
 
         self._auto_flatten   = True
@@ -152,12 +161,20 @@ class FlatteningCompositeSpace(ABC):
 
     @abstractmethod
     def sample(self):
-        """
-        """
         return
 
     def _space_is_supported(self, space):
         """
+        Is the given spaces supported?
+
+        Parameters:
+        -----------
+        space: Space
+            The space to check.
+
+        Returns:
+        --------
+        True iff the given space is supported.
         """
         for supp_space in self.supported_spaces:
             if isinstance(space, supp_space):
@@ -166,6 +183,16 @@ class FlatteningCompositeSpace(ABC):
 
     def flatten_sample(self, sample):
         """
+        Attempt to flatten the sample.
+
+        Parameters:
+        -----------
+        sample: Any
+            The sample to flatten.
+
+        Returns:
+        --------
+        A flattened version of the sample as a np.ndarray.
         """
         if isinstance(sample, np.ndarray):
             sample = sample.flatten()
@@ -191,6 +218,16 @@ class FlatteningCompositeSpace(ABC):
 
     def _flatten_composite_sample(self, sample):
         """
+        Attempt to flatten a composite sample.
+
+        Parameters:
+        -----------
+        sample: dict or tuple
+            The sample to flatten.
+
+        Returns:
+        --------
+        A flattened version of the sample as a np.ndarray.
         """
         # TODO: this could be memory intesive with very large
         # spaces. We might want to put effort into tracking the
@@ -219,6 +256,18 @@ class FlatteningCompositeSpace(ABC):
 
     def _wrap_sub_spaces(self, space):
         """
+        Replace the subspaces of a composite space with flattening
+        veresions of those spaces.
+
+        Parameters:
+        -----------
+        space: Any, should be composite Space
+            The space to wrap sub-spaces of. If it's not a Dict or Tuple,
+            it will be a no-op.
+
+        Returns:
+        --------
+        The input space with replaced subspaces.
         """
         if isinstance(space, Dict):
 
@@ -237,6 +286,16 @@ class FlatteningCompositeSpace(ABC):
 
     def _wrap_space(self, space):
         """
+        Replace composite spaces with flattening versions of those spaces.
+
+        Parameters:
+        -----------
+        space: Any
+            The space to wrap.
+
+        Returns:
+        --------
+        A flattening version of the input space.
         """
         if isinstance(space, Dict):
 
@@ -261,6 +320,18 @@ class FlatteningCompositeSpace(ABC):
 
     def _convert_spaces_to_gymnasium(self, spaces, require_supported=True):
         """
+        Convert all input spaces to from gym to gymnasium.
+
+        Parameters:
+        -----------
+        spaces: dict, Dict, or iterable
+            A container of spaces.
+        require_support: bool
+            Should we throw an error if we encounter unsupported spaces?
+
+        Returns:
+        --------
+        The input spaces with all gym version converted to gymnasium.
         """
         old_gym_spaces = [\
             old_gym.spaces.Box,
@@ -296,6 +367,16 @@ class FlatteningCompositeSpace(ABC):
 
     def _calculate_sample_sizes(self, spaces):
         """
+        Calculate the sample sizes for the given spaces.
+
+        Parameters:
+        -----------
+        spaces: dict, Dict, or iterable
+            The spaces to inspect
+
+        Returns:
+        --------
+        A np.ndarray of the sample sizes for the input spaces.
         """
         if isinstance(spaces, dict) or isinstance(spaces, Dict):
             space_iter = spaces.keys()
@@ -316,6 +397,12 @@ class FlatteningCompositeSpace(ABC):
 
     def _update_flattened_sizes(self, spaces):
         """
+        Update the flattened sizes of all of the given spaces.
+
+        Parameters:
+        -----------
+        spaces: iterable of spaces
+            The spaces to update the flattened size of.
         """
         for space in spaces:
             if isinstance(space, FlatteningCompositeSpace):
@@ -323,6 +410,7 @@ class FlatteningCompositeSpace(ABC):
 
     def _update_flattened_size(self):
         """
+        Update the flattened size for this space.
         """
         temp = self._auto_flatten
         self._auto_flatten   = True
@@ -439,10 +527,12 @@ class FlatteningDict(Dict, FlatteningCompositeSpace):
 
 
 class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
+    """
+    A wrapper around a gymnasium composite space that allows us
+    to get combined/flattened samples and ignore unsupported sub-spaces.
+    """
 
     def __init__(self, *args, **kw_args):
-        """
-        """
         super().__init__(*args, **kw_args)
         self._is_sparse    = False
         self._sparse_space = None
@@ -451,6 +541,10 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _sparsify_tuple_space(self, tuple_space):
         """
+        Remove unsupported sub-spaces from a given tuple space.
+
+        Parameters:
+        -----------
         """
         sparse_spaces = []
         sparse_idxs   = []
