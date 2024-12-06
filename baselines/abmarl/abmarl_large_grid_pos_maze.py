@@ -28,6 +28,9 @@ class AbmarlLargeGridPosMazeRunner(EnvironmentRunner):
         parser.add_argument("--bs_clip_max", default=np.inf, type=float)
 
         parser.add_argument("--learning_rate", default=5e-4, type=float)
+        parser.add_argument("--use_lr_decay", type=int, default=0)
+        parser.add_argument("--lr_decay_ts_max", type=int, default=20_000_000)
+
         parser.add_argument("--soft_resets", default=0, type=int)
 
         parser.add_argument("--enable_icm", type=int, default=0)
@@ -44,7 +47,7 @@ class AbmarlLargeGridPosMazeRunner(EnvironmentRunner):
 
         parser.add_argument("--max_ts_per_ep", type=int, default=64)
 
-        parser.add_argument("--mini_batch_size", type=int, default=128)
+        parser.add_argument("--mini_batch_size", type=int, default=512)
         parser.add_argument("--ts_per_rollout", type=int, default=4096)
         return parser
 
@@ -71,14 +74,30 @@ class AbmarlLargeGridPosMazeRunner(EnvironmentRunner):
         bs_clip_min = self.cli_args.bs_clip_min
         bs_clip_max = self.cli_args.bs_clip_max
 
+        if bool(self.cli_args.use_lr_decay):
+            lr = LinearScheduler(
+                status_key    = "timesteps",
+                status_max    = self.cli_args.lr_decay_ts_max,
+                max_value     = self.cli_args.learning_rate,
+                min_value     = 1e-10)
+
+            icm_lr = LinearScheduler(
+                status_key    = "timesteps",
+                status_max    = self.cli_args.lr_decay_ts_max,
+                max_value     = self.cli_args.icm_learning_rate,
+                min_value     = 1e-10)
+        else:
+            lr = self.cli_args.learning_rate
+            icm_lr = self.cli_args.icm_learning_rate
+
         policy_args = {\
             "ac_network"         : FeedForwardNetwork,
             "actor_kw_args"      : actor_kw_args,
             "critic_kw_args"     : critic_kw_args,
-            "lr"                 : self.cli_args.learning_rate,
+            "lr"                 : lr,
             "enable_icm"         : self.cli_args.enable_icm,
             "icm_kw_args"        : icm_kw_args,
-            "icm_lr"             : self.cli_args.icm_learning_rate,
+            "icm_lr"             : icm_lr,
             "bootstrap_clip"     : (bs_clip_min, bs_clip_max),
             "intr_reward_weight" : self.cli_args.intr_reward_weight,
         }
