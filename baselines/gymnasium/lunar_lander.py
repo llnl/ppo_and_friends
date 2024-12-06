@@ -12,7 +12,7 @@ class LunarLanderRunner(GymRunner):
 
     def run(self):
         env_generator = lambda : \
-            SingleAgentGymWrapper(gym.make('LunarLander-v2',
+            SingleAgentGymWrapper(gym.make('LunarLander-v3',
                 render_mode = self.get_gym_render_mode()))
 
         #
