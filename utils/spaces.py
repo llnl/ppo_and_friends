@@ -541,10 +541,17 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _sparsify_tuple_space(self, tuple_space):
         """
-        Remove unsupported sub-spaces from a given tuple space.
+        Recursively remove unsupported sub-spaces from the
+        given Tuple space.
 
         Parameters:
         -----------
+        tuple_space: gymnasium Tuple
+             The tuple space to sparsify.
+
+        Returns:
+        --------
+        A version of the Tuple space that has unsupported sub-spaces removed.
         """
         sparse_spaces = []
         sparse_idxs   = []
@@ -569,6 +576,17 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _sparsify_dict_space(self, dict_space):
         """
+        Recursively remove unsupported sub-spaces from the
+        given Dict space.
+
+        Parameters:
+        -----------
+        dict_space: gymnasium Dict
+             The dict space to sparsify.
+
+        Returns:
+        --------
+        A version of the Dict space that has unsupported sub-spaces removed.
         """
         sparse_spaces = {}
         for s_idx, key in enumerate(dict_space):
@@ -594,6 +612,16 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _sparsify_composite_space(self, composite):
         """
+        Remove unsupported sub-spaces from the given composite space.
+
+        Parameters:
+        -----------
+        composite: A composite space
+            The space to sparsify.
+
+        Returns:
+        --------
+        A version of the composite space with unsupported sub-spaces removed.
         """
         if isinstance(composite, Dict):
             sparse_dict = self._sparsify_dict_space(composite)
@@ -612,11 +640,29 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def sparse_sample(self, *args, **kw_args):
         """
+        Sample the sparse version of our space.
+
+        Returns:
+        --------
+        The sampled tuple.
         """
         return self._sparse_space.sample(*args, **kw_args)
 
     def _sparsify_sample(self, space, dense_sample):
         """
+        Given a dense sample, remove the sub-samples that come from
+        unsupported sub-spaces.
+
+        Parameters:
+        -----------
+        space: gymnasium space
+            The space that was sampled.
+        dense_sample: Any
+            The dense sample to sparsify.
+
+        Returns:
+        --------
+        A sparsified version of the dense sample.
         """
         if isinstance(space, SparseFlatteningTuple):
             sparse_sample = []
@@ -653,6 +699,19 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _sparse_flatten_sample(self, space, dense_sample):
         """
+        Given a dense sample, remove sub-samples from unsupported sub-spaces,
+        and then flatten the sample.
+
+        Parameters:
+        -----------
+        space: gymnasium space
+            The space that was sampled.
+        dense_sample: Any
+            The dense sample to sparsify.
+
+        Returns:
+        --------
+        A sparsified and flattened version of the dense sample.
         """
         if self._is_sparse:
             sparse_sample = self._sparsify_sample(space, dense_sample)
@@ -663,6 +722,17 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def sparse_flatten_sample(self, dense_sample):
         """
+        Given a dense sample, remove sub-samples from unsupported sub-spaces,
+        and then flatten the sample.
+
+        Parameters:
+        -----------
+        dense_sample: Any
+            The dense sample to sparsify.
+
+        Returns:
+        --------
+        A sparsified and flattened version of the dense sample.
         """
         if isinstance(dense_sample, np.ndarray):
             return dense_sample
@@ -670,6 +740,19 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _wrap_space(self, space):
         """
+        Convert the given space to a sparse flattening version of
+        itself, if available.
+
+        Parameters:
+        -----------
+        space: gymnasium space
+            The space to wrap.
+
+        Returns:
+        --------
+        If the given space is a supported composite space, a sparse
+        flattening version of it will be returned. Otherwise, the original
+        space is returned.
         """
         if isinstance(space, Dict):
 
@@ -694,6 +777,17 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _update_flattened_sizes(self, spaces):
         """
+        Update the flattened sizes of all sparse flattening composite
+        sub-spaces in the given spaces.
+
+        Parameters:
+        -----------
+        spaces: iterable
+            An iterable of spaces.
+
+        Returns:
+        --------
+        The input spaces.
         """
         for space in spaces:
             if isinstance(space, SparseFlatteningCompositeSpace):
@@ -701,6 +795,7 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _update_flattened_size(self):
         """
+        Update flattened size for all sub-spaces.
         """
         temp       = self._mode
         self.mode  = "sparse"
@@ -711,8 +806,23 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _get_space_tree_strings(self, spaces, str_tree, space_type, indent):
         """
-        """
+        Construct a string tree of the given spaces.
 
+        Paramters:
+        ----------
+        spaces: iterable
+            The spaces to construct a string tree of.
+        str_tree: str
+            An existing string tree to add the new one to.
+        space_type: str
+            The type of the spaces we're looking at (dense, sparse, etc.).
+        indent: str
+            Any indentation that should be used when constructing the tree.
+
+        Returns:
+        --------
+        A potentially updated str_tree.
+        """
         if isinstance(spaces, dict) or isinstance(spaces, Dict):
             space_iter = spaces.keys()
         else:
@@ -726,6 +836,20 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def get_tree_str(self, str_tree="", space_type="", indent=""):
         """
+        Construct a string tree of ourself.
+
+        Paramters:
+        ----------
+        str_tree: str
+            An existing string tree to add the new one to.
+        space_type: str
+            The type of the spaces we're looking at (dense, sparse, etc.).
+        indent: str
+            Any indentation that should be used when constructing the tree.
+
+        Returns:
+        --------
+        A string tree representation of ourself.
         """
         str_tree = f"\n{str_tree}{indent}{type(self)} {self._mode} mode ({space_type})\n"
         str_tree = self._get_space_tree_strings(self.spaces, str_tree, "spaces", indent + "    ")
@@ -747,6 +871,18 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
     def _update_space_modes(self, spaces, mode):
         """
+        Update the modes of all the given spaces.
+
+        Parameters:
+        -----------
+        spaces: iterable
+            An iterable of spaces.
+        mode: str
+            The mode to switch to.
+
+        Returns:
+        --------
+        The input spaces with their mode updated.
         """
         if isinstance(spaces, dict) or isinstance(spaces, Dict):
             space_iter = spaces.keys()
@@ -773,9 +909,23 @@ class SparseFlatteningCompositeSpace(FlatteningCompositeSpace):
 
 
 class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
+    """
+    The SparseFlatteningTuple allows for two modes:
+        1. dense: the space will act the same as a Tuple space,
+           but the user can "sparsify" and flatten dense samples, which removes all
+           sub-samples that come from unsupported sub-spaces before flattening.
+           The dense samples that come from calling sample() must be sent
+           through the "sparse_flatten_sample" method to achieve this.
+        2. sparse: when sampling, resulting samples will not contain
+           any sub-samples that would have come from un-supported sub-spaces.
+    """
 
     def __init__(self, spaces, *args, **kw_args):
         """
+        Parameters:
+        -----------
+        spaces: iterable
+            The spaces to utilize in our Tuple space.
         """
         spaces = self._convert_spaces_to_gymnasium(spaces, require_supported=False)
 
@@ -815,9 +965,23 @@ class SparseFlatteningTuple(Tuple, SparseFlatteningCompositeSpace):
 
 
 class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
+    """
+    The SparseFlatteningDict allows for two modes:
+        1. dense: the space will act the same as a Dict space,
+           but the user can "sparsify" and flatten dense samples, which removes all
+           sub-samples that come from unsupported sub-spaces before flattening.
+           The dense samples that come from calling sample() must be sent
+           through the "sparse_flatten_sample" method to achieve this.
+        2. sparse: when sampling, resulting samples will not contain
+           any sub-samples that would have come from un-supported sub-spaces.
+    """
 
     def __init__(self, spaces, *args, **kw_args):
         """
+        Parameters:
+        -----------
+        spaces: dict
+            The spaces to utilize in our Dict space.
         """
         spaces = self._convert_spaces_to_gymnasium(spaces, require_supported=False)
 
@@ -857,15 +1021,14 @@ class SparseFlatteningDict(Dict, SparseFlatteningCompositeSpace):
 
 
 class ShapelyDiscrete(Discrete):
-
+    """
+    A version of Discrete that has shape (1,) and returns
+    samples in a numpy array.
+    """
     def __init__(self, *args, **kw_args):
-        """
-        """
         super().__init__(*args, **kw_args)
 
     def sample(self, *args, **kw_args):
-        """
-        """
         return np.array((super().sample(*args, **kw_args),))
 
     @property
