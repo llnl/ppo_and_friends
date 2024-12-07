@@ -472,10 +472,10 @@ class FlatteningTuple(Tuple, FlatteningCompositeSpace):
         FlatteningCompositeSpace.__init__(self, *args, **kw_args)
 
         spaces = self._convert_spaces_to_gymnasium(spaces)
+        super().__init__(spaces, *args, **kw_args)
+
         self.sample_sizes = self._calculate_sample_sizes(spaces)
         self._update_flattened_size()
-
-        super().__init__(spaces, *args, **kw_args)
 
     def sample(self):
         """
