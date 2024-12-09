@@ -419,6 +419,10 @@ class FlatteningCompositeSpace(ABC):
         self._update_flattened_sizes(self.spaces)
 
     @property
+    def flattened_size(self):
+        return self._flattened_size
+
+    @property
     def auto_flatten(self):
         return self._auto_flatten
 
