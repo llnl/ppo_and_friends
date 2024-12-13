@@ -83,6 +83,30 @@ jobs:
         cd test
         pytest tests/train/ -k "zoo or mixed_actions"
 
+  test_component:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.8"
+
+    - name: Install dependencies
+      run: |
+        sudo apt install libopenmpi-dev
+        pip3 install pip==23.3.2
+        pip3 install setuptools==65.5.0
+        pip3 install pytest
+        pip3 install .[gymnasium]
+
+    - name: Test with pytest
+      run: |
+        cd test
+        pytest tests/component
+
   test_abmarl:
 
     runs-on: ubuntu-latest

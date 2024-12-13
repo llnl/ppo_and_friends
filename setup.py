@@ -49,6 +49,7 @@ setup(name             = "ppo_and_friends",
       extras_require = {
           'gym': ['gym==0.21.0', 'rware==1.0.3'],
           'gymnasium': ['gymnasium[mujoco]', 'gymnasium[atari]', 'autorom[accept-rom-license]', 'gym==0.23.0'],
+          'minigrid': ['gymnasium', 'minigrid', 'gym==0.23.0'],
           'abmarl': ['abmarl', 'gym==0.23.0'],
           'pettingzoo': ['pettingzoo==1.23', 'gym==0.23.0'],
       },

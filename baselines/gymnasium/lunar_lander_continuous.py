@@ -12,7 +12,7 @@ class LunarLanderContinuousRunner(GymRunner):
 
     def run(self):
         env_generator = lambda : \
-            SingleAgentGymWrapper(gym.make('LunarLanderContinuous-v2',
+            SingleAgentGymWrapper(gym.make('LunarLanderContinuous-v3',
                 render_mode = self.get_gym_render_mode()))
 
         #

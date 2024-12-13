@@ -1,12 +1,14 @@
 """
-    This module contains wrappers for gym environments.
+This module contains wrappers for gym environments.
 """
 from ppo_and_friends.environments.ppo_env_wrappers import PPOEnvironmentWrapper
 import numpy as np
 from gymnasium.spaces import Box, Discrete
 from ppo_and_friends.utils.mpi_utils import rank_print
+from ppo_and_friends.utils.spaces import validate_observation_space
 from abc import abstractmethod
 from functools import reduce
+import numbers
 
 from mpi4py import MPI
 comm      = MPI.COMM_WORLD
@@ -16,14 +18,15 @@ num_procs = comm.Get_size()
 
 class PPOGymWrapper(PPOEnvironmentWrapper):
     """
-        OpenAI gym environments typically return numpy arrays
-        for each step. This wrapper will convert these environments
-        into a more multi-agent friendly setup, where each step/reset
-        returns dictionaries mapping agent ids to their attributes.
-        This will also return a critic observation along with the
-        actor observation.
+    OpenAI gym environments typically return numpy arrays
+    for each step. This wrapper will convert these environments
+    into a more multi-agent friendly setup, where each step/reset
+    returns dictionaries mapping agent ids to their attributes.
+    This will also return a critic observation along with the
+    actor observation.
     """
     def __init__(self,
+                 env,
                  *args,
                  **kw_args):
 
@@ -37,7 +40,10 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
                 rank_print(msg)
                 comm.Abort()
 
+        env = validate_observation_space(env)
+
         super(PPOGymWrapper, self).__init__(
+            env,
             *args,
             **kw_args)
 
@@ -45,32 +51,39 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
 
     def step(self, actions):
         """
-            Take a step in the environment.
+        Take a step in the environment.
 
-            Arguments:
-                actions    A dictionary mapping agent ids to actions.
+        Parameters:
+        -----------
+        actions: dict
+            A dictionary mapping agent ids to actions.
 
-            Returns:
-                The observation, critic_observation, reward, done,
-                and info tuple.
+        Returns:
+        --------
+        The observation, critic_observation, reward, done,
+        and info tuple.
         """
         actions = self._filter_done_agent_actions(actions)
 
         obs, critic_obs, reward, terminated, truncated, info = \
-            self._wrap_gym_step(*self.env.step(
-                self._unwrap_action(actions)))
+            self._wrap_gym_step(
+                *self._validate_step_return(
+                    *self.env.step(
+                        self._unwrap_action(actions))))
 
         return obs, critic_obs, reward, terminated, truncated, info
 
     def reset(self):
         """
-            Reset the environment.
+        Reset the environment.
 
-            Returns:
-                The actor and critic observations.
+        Returns:
+        --------
+        The actor and critic observations.
         """
         obs, critic_obs = self._wrap_gym_reset(
-            *self.env.reset(seed = self.random_seed))
+            *self._validate_reset_return(
+                *self.env.reset(seed = self.random_seed)))
 
         #
         # Gym versions >= 0.26 require the random seed to be set
@@ -88,14 +101,17 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
     def _unwrap_action(self,
                        action):
         """
-            An abstract method defining how to unwrap an action.
+        An abstract method defining how to unwrap an action.
 
-            Arguments:
-                A dictionary mapping agent ids to actions.
+        Parameters:
+        -----------
+        action: dict
+            A dictionary mapping agent ids to actions.
 
-            Returns:
-                Agent actions that the underlying environment can
-                process.
+        Returns:
+        --------
+        Agent actions that the underlying environment can
+        process.
         """
         return
 
@@ -107,19 +123,26 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
                        truncated,
                        info):
         """
-            An abstract method defining how to wrap our enviornment
-            step.
+        An abstract method defining how to wrap our enviornment
+        step.
 
-            Arguments:
-                obs         The agent observations.
-                reward      The agent rewards.
-                terminated  The agent termination flags.
-                truncated   The agent truncated flags.
-                info        The agent info.
+        Paramters:
+        ----------
+        obs: array-like or tuple
+            The agent observations.
+        reward: float or tuple
+            The agent rewards.
+        terminated: bool or tuple
+            The agent termination flags.
+        truncated: bool or tuple
+            The agent truncated flags.
+        info: dict
+            The agent info.
 
-            Returns:
-                A tuple of form (obs, critic_obs, reward,
-                terminated, truncated, info) s.t. each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs, reward,
+        terminated, truncated, info) s.t. each is a dictionary.
         """
         return
 
@@ -128,36 +151,92 @@ class PPOGymWrapper(PPOEnvironmentWrapper):
                         obs,
                         info):
         """
-            An abstract method defining how to wrap our enviornment
-            reset.
+        An abstract method defining how to wrap our enviornment
+        reset.
 
-            Arguments:
-                obs        The agent observations.
-                info       An info dictionary.
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            An info dictionary.
 
-            Returns:
-                A tuple of form (obs, critic_obs) s.t.
-                each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs) s.t.
+        each is a dictionary.
         """
         return
 
     def seed(self,
              seed):
         """
-            Set the seed for this environment.
+        Set the seed for this environment.
 
-            Arguments:
-                seed    The random seed.
+        Parameters:
+        -----------
+        seed: int
+            The random seed.
         """
         if seed != None:
             assert type(seed) == int
 
         self.random_seed = seed
 
+    @abstractmethod
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return
+
+    @abstractmethod
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return
+
 
 class SingleAgentGymWrapper(PPOGymWrapper):
     """
-        A wrapper for single agent gym environments.
+    A wrapper for single agent gym environments.
     """
 
     def __init__(self,
@@ -165,9 +244,12 @@ class SingleAgentGymWrapper(PPOGymWrapper):
                  test_mode   = False,
                  **kw_args):
         """
-            Arguments:
-                env            The gym environment to wrap.
-                test_mode      Are we testing?
+        Parameters:
+        ----------
+        env: gym environment
+            The gym environment to wrap.
+        test_mode: bool
+            Are we testing?
         """
         super(SingleAgentGymWrapper, self).__init__(
             env,
@@ -182,14 +264,14 @@ class SingleAgentGymWrapper(PPOGymWrapper):
 
     def _define_agent_ids(self):
         """
-            Define our agent_ids.
+        Define our agent_ids.
         """
         self.agent_ids  = ("agent0",)
         self.num_agents = 1
 
     def _define_multi_agent_spaces(self):
         """
-            Define our multi-agent spaces. We have a single agent here,
+        Define our multi-agent spaces. We have a single agent here,
         """
         for a_id in self.agent_ids:
             self.action_space[a_id]      = self.env.action_space
@@ -197,10 +279,11 @@ class SingleAgentGymWrapper(PPOGymWrapper):
 
     def get_agent_id(self):
         """
-            Get our only agent's id.
+        Get our only agent's id.
 
-            Returns:
-                Our agent's id.
+        Returns:
+        --------
+        Our agent's id.
         """
         if len(self.agent_ids) != 1:
             msg  = "ERROR: SingleAgentGymWrapper expects a single agnet, "
@@ -213,17 +296,25 @@ class SingleAgentGymWrapper(PPOGymWrapper):
     def _unwrap_action(self,
                        action):
         """
-            An method defining how to unwrap an action.
+        An method defining how to unwrap an action.
 
-            Arguments:
-                A dictionary mapping agent ids to actions.
+        Parameters:
+        ----------
+        action: dict
+            A dictionary mapping agent ids to actions.
 
-            Returns:
-                A numpy array of actions.
+        Returns:
+        --------
+        A numpy array of actions.
         """
         agent_id   = self.get_agent_id()
         env_action = action[agent_id]
-        env_action = env_action.reshape(self.action_space[agent_id].shape)
+
+        if self.action_space[agent_id].shape == ():
+            env_action = env_action.item()
+        else:
+            env_action = env_action.reshape(self.action_space[agent_id].shape)
+
         return env_action
 
     def _wrap_gym_step(self,
@@ -233,19 +324,26 @@ class SingleAgentGymWrapper(PPOGymWrapper):
                        truncated,
                        info):
         """
-            A method defining how to wrap our enviornment
-            step.
+        A method defining how to wrap our enviornment
+        step.
 
-            Arguments:
-                obs         The agent observations.
-                reward      The agent rewards.
-                terminated  The agent termination flags.
-                truncated   The agent truncated flags.
-                info        The agent info.
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
 
-            Returns:
-                A tuple of form (obs, critic_obs, reward,
-                terminated, truncated, info) s.t. each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs, reward,
+        terminated, truncated, info) s.t. each is a dictionary.
         """
         agent_id = self.get_agent_id()
 
@@ -282,16 +380,20 @@ class SingleAgentGymWrapper(PPOGymWrapper):
                         obs,
                         info):
         """
-            A method defining how to wrap our enviornment
-            reset.
+        A method defining how to wrap our enviornment
+        reset.
 
-            Arguments:
-                obs        The agent observations.
-                info       The agent info.
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            The agent info.
 
-            Returns:
-                A tuple of form (obs, critic_obs) s.t.
-                each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs) s.t.
+        each is a dictionary.
         """
         agent_id = self.get_agent_id()
 
@@ -312,18 +414,203 @@ class SingleAgentGymWrapper(PPOGymWrapper):
 
         return obs, critic_obs
 
+    def _validate_obs(self,
+                      obs):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+
+        Returns:
+        --------
+        The agent observations.
+        """
+        #
+        # Black magic: some environments (minigrid...) have dict observations.
+        # We replace the observation space with SparseFlatteningDict, which
+        # allows us to flatten and remove unsupported sub-spaces.
+        #
+        if isinstance(obs, dict):
+            obs = self.env.observation_space.sparse_flatten_sample(obs)
+
+        if isinstance(obs, numbers.Number):
+            obs = np.array([obs])
+        return obs
+
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return self._validate_obs(obs), reward, terminated, truncated, info
+
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like or number
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return self._validate_obs(obs), info
+
+
+class SingleAgentGymSparseRewardWrapper(SingleAgentGymWrapper):
+
+    def __init__(self,
+                 env,
+                 reward_trigger = 1.0,
+                 reward_value   = 1.0,
+                 sparse_value   = 0.0,
+                 reward_freq    = 1,
+                 **kw_args):
+        """
+        Parameters:
+        ----------
+        env: gym environment
+            The gym environment to wrap.
+        reward_trigger: float or tuple
+            A reward is given only when this a reward of reward_trigger
+            is given by the underlying environment. This can either be a
+            float or a tuple of the inclusive [min, max] range.
+        reward_value: float
+            When reward_trigger is encountered reward_freq times, reward_value is
+            the returned reward.
+        sparse_value: float
+            The value to return when the reward conditions have not been met.
+        reward_freq: int
+            reward_trigger must be encountered reward_freq times before
+            reward_value is returned.
+        """
+        super(SingleAgentGymSparseRewardWrapper, self).__init__(
+            env,
+            **kw_args)
+
+        if type(reward_trigger) == float:
+            self.reward_trigger_min = reward_trigger
+            self.reward_trigger_max = reward_trigger
+        elif type(reward_trigger) == tuple:
+            assert len(reward_trigger) == 2
+
+            self.reward_trigger_min = reward_trigger[0]
+            self.reward_trigger_max = reward_trigger[1]
+        else:
+            msg  = f"ERROR: reward_trigger must be a float or tuple "
+            msg += f"but received {type(reward_trigger)}."
+            rank_print(msg)
+            comm.Abort()
+
+
+        self.reward_value   = reward_value
+        self.sparse_value   = sparse_value
+        self.reward_freq    = reward_freq
+        self.trigger_count  = 0
+
+    def _wrap_gym_step(self, *args):
+        """
+        A method defining how to wrap our enviornment
+        step.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs, reward,
+        terminated, truncated, info) s.t. each is a dictionary.
+        """
+        agent_id = self.get_agent_id()
+
+        obs, critic_obs, reward, terminated, truncated, info = super()._wrap_gym_step(*args)
+
+        triggered = False
+        if reward[agent_id] >= self.reward_trigger_min and reward[agent_id] <= self.reward_trigger_max:
+            triggered = True
+            self.trigger_count += 1
+
+        reward[agent_id] = self.sparse_value
+
+        if triggered and self.trigger_count % self.reward_freq == 0.0:
+            reward[agent_id] = self.reward_value
+
+        return obs, critic_obs, reward, terminated, truncated, info
+
+    def _wrap_gym_reset(self, *args):
+        """
+        A method defining how to wrap our enviornment
+        reset.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs) s.t.
+        each is a dictionary.
+        """
+        self.trigger_count = 0
+        return super()._wrap_gym_reset(*args)
+
 
 class MultiAgentGymWrapper(PPOGymWrapper):
     """
-        A wrapper for multi-agent gym environments.
+    A wrapper for multi-agent gym environments.
 
-        IMPORTANT: The following assumptions are made about the gym
-        environment:
+    IMPORTANT: The following assumptions are made about the gym
+    environment:
 
-            1. All agent observations, actions, etc. are given in tuples
-               s.t. each entry in the tuple corresponds to an agent.
-            2. All agents must step at once. If an agent "dies", it still
-               will return information every step.
+        1. All agent observations, actions, etc. are given in tuples
+           s.t. each entry in the tuple corresponds to an agent.
+        2. All agents must step at once. If an agent "dies", it still
+           will return information every step.
     """
 
     def __init__(self,
@@ -332,11 +619,14 @@ class MultiAgentGymWrapper(PPOGymWrapper):
                  add_agent_ids = True,
                  **kw_args):
         """
-            Arguments:
-                env            The gym environment to wrap.
-                test_mode      Are we in test mode?
-                add_agent_ids  Should we add agent ids to the agent
-                               observations?
+        Parameters:
+        -----------
+        env: gym enviornment
+            The gym environment to wrap.
+        test_mode: bool
+            Are we in test mode?
+        add_agent_ids: bool
+            Should we add agent ids to the agent observations?
         """
         super(MultiAgentGymWrapper, self).__init__(
             env,
@@ -346,14 +636,14 @@ class MultiAgentGymWrapper(PPOGymWrapper):
 
     def _define_agent_ids(self):
         """
-            Define our agent_ids.
+        Define our agent_ids.
         """
         self.num_agents = len(self.env.observation_space)
         self.agent_ids  = tuple(f"agent{i}" for i in range(self.num_agents))
 
     def _define_multi_agent_spaces(self):
         """
-            Define our multi-agent spaces.
+        Define our multi-agent spaces.
         """
         #
         # Some gym environments are buggy and require a reshape.
@@ -375,19 +665,27 @@ class MultiAgentGymWrapper(PPOGymWrapper):
     def _unwrap_action(self,
                        actions):
         """
-            An method defining how to unwrap an action.
+        An method defining how to unwrap an action.
 
-            Arguments:
-                A dictionary mapping agent ids to actions.
+        Parameters:
+        -----------
+        actions: dict
+            A dictionary mapping agent ids to actions.
 
-            Returns:
-                A tuple of actions.
+        Returns:
+        --------
+        A tuple of actions.
         """
         gym_actions = np.array([None] * self.num_agents)
 
         for a_idx, a_id in enumerate(self.agent_ids):
+
             env_action = actions[a_id]
-            gym_actions[a_idx] = env_action
+
+            if self.action_space[a_id].shape == ():
+                gym_actions[a_idx] = env_action.item()
+            else:
+                gym_actions[a_idx] = env_action.reshape(self.action_space[a_id].shape)
 
         return tuple(gym_actions)
 
@@ -398,19 +696,26 @@ class MultiAgentGymWrapper(PPOGymWrapper):
                        truncated,
                        info):
         """
-            A method defining how to wrap our enviornment
-            step.
+        A method defining how to wrap our enviornment
+        step.
 
-            Arguments:
-                obs         The agent observations.
-                reward      The agent rewards.
-                terminated  The agent termination flags.
-                truncated   The agent truncated flags.
-                info        The agent info.
+        Parameters:
+        -----------
+        obs: tuple
+            The agent observations.
+        reward: tuple
+            The agent rewards.
+        terminated: tuple
+            The agent termination flags.
+        truncated: tuple
+            The agent truncated flags.
+        info: dict
+            The agent info.
 
-            Returns:
-                A tuple of form (obs, critic_obs, reward,
-                terminated, truncated, info) s.t. each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs, reward,
+        terminated, truncated, info) s.t. each is a dictionary.
         """
         wrapped_obs        = {}
         wrapped_reward     = {}
@@ -481,16 +786,20 @@ class MultiAgentGymWrapper(PPOGymWrapper):
                         obs,
                         info):
         """
-            A method defining how to wrap our enviornment
-            reset.
+        A method defining how to wrap our enviornment
+        reset.
 
-            Arguments:
-                obs        The agent observations.
-                info       The agent info.
+        Parameters:
+        -----------
+        obs: tuple
+            The agent observations.
+        info: dict
+            The agent info.
 
-            Returns:
-                A tuple of form (obs, critic_obs) s.t.
-                each is a dictionary.
+        Returns:
+        --------
+        A tuple of form (obs, critic_obs) s.t.
+        each is a dictionary.
         """
         wrapped_obs  = {}
         wrapped_done = {}
@@ -516,3 +825,79 @@ class MultiAgentGymWrapper(PPOGymWrapper):
             wrapped_obs, wrapped_done)
 
         return wrapped_obs, critic_obs
+
+    def _validate_obs(self,
+                      obs):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+
+        Returns:
+        --------
+        The agent observations.
+        """
+        for i in range(self.num_agents):
+
+            #
+            # Black magic: some environments (minigrid...) have dict observations.
+            # We replace the observation space with SparseFlatteningDict, which
+            # allows us to flatten and remove unsupported sub-spaces.
+            #
+            if isinstance(obs[i], dict):
+                obs[i] = self.env.observation_space.sparse_flatten_sample(obs[i])
+
+            if isinstance(obs[i], numbers.Number):
+                obs[i] = np.array([obs[i]])
+        return obs
+
+    def _validate_step_return(self,
+                              obs,
+                              reward,
+                              terminated,
+                              truncated,
+                              info):
+        """
+        Validate the return values from stepping in our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        reward: float
+            The agent rewards.
+        terminated: bool
+            The agent termination flags.
+        truncated: bool
+            The agent truncated flags.
+        info: dict
+            The agent info.
+
+        Returns:
+        --------
+        A tuple of form (obs, reward,
+        terminated, truncated, info).
+        """
+        return self._validate_obs(obs), reward, terminated, truncated, info
+
+    def _validate_reset_return(self,
+                               obs,
+                               info):
+        """
+        Validate the return values from resetting our environment.
+
+        Parameters:
+        -----------
+        obs: array-like
+            The agent observations.
+        info: dict
+            An info dictionary.
+
+        Returns:
+        --------
+        A tuple of form (obs, info).
+        """
+        return self._validate_obs(obs), info

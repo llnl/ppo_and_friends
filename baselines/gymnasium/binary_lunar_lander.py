@@ -46,7 +46,7 @@ class BinaryLunarLanderRunner(GymRunner):
     def run(self):
         env_generator = lambda : \
             SingleAgentGymWrapper(
-                MultiBinaryLunarLanderWrapper(gym.make('LunarLander-v2',
+                MultiBinaryLunarLanderWrapper(gym.make('LunarLander-v3',
                 render_mode = self.get_gym_render_mode())))
 
         #
