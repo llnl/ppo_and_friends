@@ -1,4 +1,4 @@
-from moviepy.editor import ImageSequenceClip
+from moviepy.video.io import ImageSequenceClip
 import numpy as np
 import os
 

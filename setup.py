@@ -24,7 +24,7 @@ dependencies = [
     'numpy',
     'dill',
     'mpi4py',
-    'moviepy',
+    'moviepy>=2.0.0',
     'pyyaml',
     'torch>=1.10.2',
     'pymunk',
