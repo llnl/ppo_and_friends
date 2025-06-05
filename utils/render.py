@@ -1,4 +1,4 @@
-from moviepy.video.io import ImageSequenceClip
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import numpy as np
 import os
 
@@ -7,7 +7,7 @@ def save_frames_as_gif(
     out_path,
     filename     = 'test.gif',
     fps          = 15,
-    frame_reduce = 2):
+    frame_reduce = 0):
     """
         Save numpy frames as a gif.
 
@@ -22,8 +22,11 @@ def save_frames_as_gif(
     #
     # Cut the frames in half for for every frame_reduce.
     #
+
     for i in range(frame_reduce):
         frames = np.array(frames)[1::2]
+        # Convert back to list
+        frames = frames.tolist()
 
-    clip = ImageSequenceClip(list(frames), fps=fps)
+    clip = ImageSequenceClip(frames, fps=fps)
     clip.write_gif(os.path.join(out_path, filename), fps=fps)
