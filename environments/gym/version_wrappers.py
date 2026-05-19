@@ -3,7 +3,6 @@
     X to work in gym version Y.
 """
 import gymnasium as gym
-import gym as old_gym
 import numpy as np
 from ppo_and_friends.utils.mpi_utils import rank_print
 from ppo_and_friends.utils.spaces import gym_space_to_gymnasium_space

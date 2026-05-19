@@ -1,4 +1,9 @@
-import gym as old_gym
+try:
+    import gym as old_gym
+except ImportError:
+    old_gym = None
+
+
 import gymnasium as gym
 from gymnasium.spaces import Tuple, Box, Discrete, MultiDiscrete, MultiBinary, Dict, Sequence, Graph
 from gymnasium.spaces.space import Space
@@ -28,8 +33,10 @@ def validate_observation_space(env):
     --------
     The input environment with an (possibly) updated observation space.
     """
-    is_discrete_space = lambda s : type(s) == Discrete or type(s) == old_gym.spaces.Discrete
-    get_space_args    = lambda s : (s.n, s.start, s._np_random)
+    is_discrete_space = lambda s: type(s) == Discrete or (
+        old_gym is not None and type(s) == old_gym.spaces.Discrete
+    )
+    get_space_args = lambda s: (s.n, s.start, s._np_random)
 
     if is_discrete_space(env.observation_space):
         n, start, seed = get_space_args(env.observation_space)
@@ -79,6 +86,9 @@ def gym_space_to_gymnasium_space(space):
     --------
     The input space converted to gymnasium.
     """
+    if old_gym is None:
+        return space
+
     if isinstance(space, FlatteningCompositeSpace):
         return space
 
@@ -333,7 +343,9 @@ class FlatteningCompositeSpace(ABC):
         --------
         The input spaces with all gym version converted to gymnasium.
         """
-        old_gym_spaces = [\
+        if old_gym is None:
+            return spaces
+        old_gym_spaces = [
             old_gym.spaces.Box,
             old_gym.spaces.Discrete,
             old_gym.spaces.MultiDiscrete,

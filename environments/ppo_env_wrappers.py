@@ -13,7 +13,11 @@ from abc import ABC, abstractmethod
 from ppo_and_friends.utils.mpi_utils import rank_print
 from collections.abc import Iterable
 from gymnasium.spaces import Dict, Tuple, Box, Discrete
-import gym.spaces as old_gym_spaces
+
+try:
+    import gym.spaces as old_gym_spaces
+except ImportError:
+    old_gym_spaces = None
 import gymnasium as gym
 
 from mpi4py import MPI
@@ -479,8 +483,9 @@ class PPOEnvironmentWrapper(ABC):
             Returns:
                 The space expanded for agent ids.
         """
-        if (issubclass(type(space), Box) or
-            issubclass(type(space), old_gym_spaces.Box)):
+        if issubclass(type(space), Box) or (
+            old_gym_spaces is not None and issubclass(type(space), old_gym_spaces.Box)
+        ):
 
             low   = space.low
             high  = space.high

@@ -773,7 +773,7 @@ class PPODataset(Dataset):
             combine_episodes(self.episodes, self.build_hidden_states)
 
         if self.build_terminal_mask:
-            terminal_mask = np.zeros(self.total_timestates).astype(np.bool)
+            terminal_mask = np.zeros(self.total_timestates).astype(np.bool_)
             cur_ts = 0
 
         if self.build_terminal_mask:
@@ -795,7 +795,7 @@ class PPODataset(Dataset):
                 [None] * max_ts, dtype=object)
 
             for ts in range(max_ts):
-                mask     = np.zeros(self.sequence_length).astype(np.bool)
+                mask     = np.zeros(self.sequence_length).astype(np.bool_)
                 mask_idx = 0
                 stop_ts  = ts + self.sequence_length
 
