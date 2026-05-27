@@ -314,7 +314,7 @@ def get_action_prediction_shape(space):
     tuple:
         The shape of our actor's prediction.
     """
-    if isinstance(space, (Box, ppoaf_spaces.FlatteningCompositeSpace)):
+    if isinstance(space, Box):
         return space.shape
 
     elif (isinstance(space, Discrete) or
@@ -324,7 +324,7 @@ def get_action_prediction_shape(space):
     elif isinstance(space, MultiDiscrete):
         return (functools.reduce(lambda a, b: a+b, space.nvec),)
 
-    elif isinstance(space, Tuple):
+    elif isinstance(space, (Tuple, Dict, ppoaf_spaces.FlatteningCompositeSpace)):
 
         pred_shapes = []
         for sub_space in space:
