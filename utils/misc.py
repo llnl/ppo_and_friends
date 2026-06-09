@@ -324,7 +324,7 @@ def get_action_prediction_shape(space):
     elif isinstance(space, MultiDiscrete):
         return (functools.reduce(lambda a, b: a+b, space.nvec),)
 
-    elif isinstance(space, (Tuple, Dict, ppoaf_spaces.FlatteningCompositeSpace)):
+    elif isinstance(space, (Tuple, ppoaf_spaces.FlatteningCompositeSpace)):
 
         pred_shapes = []
         for sub_space in space:
