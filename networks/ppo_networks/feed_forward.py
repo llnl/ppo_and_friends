@@ -64,7 +64,7 @@ class FeedForwardNetwork(PPONetwork):
                 out_init     = out_init)
 
     def forward(self, _input):
-        out = _input.flatten(start_dim=1)
+        out = _input.flatten(start_dim = 1)
         out_ = self.sequential_net(out)
 
         if torch.isnan(out_).any():
