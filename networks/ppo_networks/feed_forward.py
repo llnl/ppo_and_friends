@@ -65,10 +65,10 @@ class FeedForwardNetwork(PPONetwork):
 
     def forward(self, _input):
         out = _input.flatten(start_dim = 1)
-        out = self.sequential_net(out)
+        out_ = self.sequential_net(out)
 
-        if torch.isnan(out).any():
-            msg  = "ERROR: self.sequential_net as output nan values! "
+        if torch.isnan(out_).any():
+            msg = "ERROR: self.sequential_net as output nan values! "
             msg += "\n{out}"
             rank_print(msg)
             comm.Abort()
@@ -79,9 +79,9 @@ class FeedForwardNetwork(PPONetwork):
         # after activation.
         #
         if self.is_embedded:
-            return self.activation(out)
+            return self.activation(out_)
 
-        out = self.output_func(out)
+        out = self.output_func(out_)
 
         return self._shape_output(out)
 

@@ -743,10 +743,10 @@ class MixedDistribution(PPODistribution):
                 self.nvec.append(space.n)
 
             elif issubclass(type(space), spaces.Discrete):
-                self.nvec.append(space.n)
+                self.nvec.append(1)
 
             elif issubclass(type(space), spaces.MultiDiscrete):
-                self.nvec.append(space.nvec.sum())
+                self.nvec.append(space.nvec.size)
 
             else:
                 msg  = f"ERROR: encountered unsupported space of type "
@@ -789,7 +789,7 @@ class MixedDistribution(PPODistribution):
         """
         dists = []
         start = 0
-        for idx, dim in enumerate(self.nvec):
+        for idx, dim in enumerate(self.pred_sizes):
             stop = start + dim
 
             sub_probs = probs[:, start : stop]
@@ -799,7 +799,7 @@ class MixedDistribution(PPODistribution):
 
             start = stop
 
-        return np.array(dists)
+        return dists
 
     def get_log_probs(self, dists, actions):
         """
@@ -1029,17 +1029,17 @@ def get_actor_distribution(
         def output_func(pred):
 
             start = 0
+            pred_parts = []
             for idx, pred_size in enumerate(pred_sizes):
 
                 out_func = output_funcs[idx]
                 stop = start + pred_size
-
-                pred[:, start : stop] = out_func(pred[:, start : stop])
+                pred_parts.append(out_func(pred[:, start:stop]))
 
                 start = stop
+            out = torch.cat(pred_parts, dim=1)
+            return out
 
-            return pred
-                
     elif action_dtype == "discrete":
         distribution = CategoricalDistribution(**kw_args)
         output_func  = lambda x : t_functional.softmax(x, dim=-1)

@@ -2,7 +2,7 @@ import numpy as np
 import functools
 import torch
 from ppo_and_friends.utils.stats import RunningMeanStd
-from gymnasium.spaces import Box, Discrete, MultiDiscrete, MultiBinary, Tuple
+from gymnasium.spaces import Box, Discrete, MultiDiscrete, MultiBinary, Tuple, Dict
 import gymnasium.spaces as spaces
 import ppo_and_friends.utils.spaces as ppoaf_spaces
 import os
@@ -324,7 +324,7 @@ def get_action_prediction_shape(space):
     elif isinstance(space, MultiDiscrete):
         return (functools.reduce(lambda a, b: a+b, space.nvec),)
 
-    elif isinstance(space, Tuple):
+    elif isinstance(space, (Tuple, ppoaf_spaces.FlatteningCompositeSpace)):
 
         pred_shapes = []
         for sub_space in space:

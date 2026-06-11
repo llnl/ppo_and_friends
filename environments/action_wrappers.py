@@ -1,5 +1,9 @@
 from gymnasium.spaces import Box, MultiDiscrete, Tuple
-import gym as old_gym
+
+try:
+    import gym as old_gym
+except ImportError:
+    old_gym = None
 from abc import ABC, abstractmethod
 from ppo_and_friends.utils.mpi_utils import rank_print
 import numpy as np
@@ -81,8 +85,10 @@ class BoxIntActionWrapper():
         space: gymnasium or gym space
             The space to wrap. This should of type Box int.
         """
-        if ((type(space) != Box and type(space) != old_gym.spaces.Box)
-            or not np.issubdtype(space.dtype, np.integer)):
+        if (
+            type(space) != Box
+            and (old_gym is not None and type(space) != old_gym.spaces.Box)
+        ) or not np.issubdtype(space.dtype, np.integer):
 
             msg  = "ERROR: BoxIntActionWrapper only accepts spaces of "
             msg += f"type Box int. Received type {type(space)} {space.dtype}"
@@ -109,8 +115,8 @@ class BoxIntActionWrapper():
 
             self.range[i] = len(self.true_values[i])
 
-        if type(space) == old_gym.spaces.Box:
-            msg  = "WARNING: BoxIntActionWrapper received an old gym space. "
+        if old_gym is not None and type(space) == old_gym.spaces.Box:
+            msg = "WARNING: BoxIntActionWrapper received an old gym space. "
             msg += "It will use old gym for consistency."
             rank_print(msg)
 

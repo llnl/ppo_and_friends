@@ -1,4 +1,7 @@
-from moviepy.editor import ImageSequenceClip
+try:
+    from moviepy.editor import ImageSequenceClip
+except ModuleNotFoundError:
+    from moviepy import ImageSequenceClip
 import numpy as np
 import os
 
