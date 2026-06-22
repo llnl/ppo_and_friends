@@ -412,7 +412,7 @@ class RewardNormalizer(IdentityWrapper):
                 for env_idx in range(self.batch_size):
                     self.running_reward[agent_id][env_idx] = \
                         self.running_reward[agent_id][env_idx] * \
-                        self.gamma + reward[agent_id][env_idx]
+                        self.gamma + reward[agent_id][env_idx].squeeze()
 
                     self.running_stats[agent_id].update(
                         self.running_reward[agent_id])
